@@ -27,7 +27,7 @@ The interactive setup SHALL present a multi-select list of supported agents for 
 
 #### Scenario: Agent selection with grouping
 - **WHEN** the agent selection prompt is displayed
-- **THEN** agents are grouped into "Universal (.agents/skills)" agents and "Other agents" with their specific paths shown, matching the style of the Vercel skills CLI
+- **THEN** agents are grouped into "Universal (.agents/)" agents and "Other agents" with their specific paths shown
 
 #### Scenario: User selects multiple agents
 - **WHEN** user selects pi and opencode during setup
@@ -37,6 +37,21 @@ The interactive setup SHALL present a multi-select list of supported agents for 
 - **WHEN** user deselects all agents and tries to confirm
 - **THEN** the tool requires at least one agent to be selected before proceeding
 
+#### Scenario: Custom agents appear in selection
+- **WHEN** the user has previously defined custom agents in the global config and re-runs setup via `agentdeps config`
+- **THEN** custom agents appear alongside built-in agents in the selection prompt
+
+### Requirement: Setup asks for install method
+The interactive setup SHALL ask the user to choose between link and copy install methods.
+
+#### Scenario: User selects link
+- **WHEN** user selects "Link (symlinks)" during setup
+- **THEN** `install_method: link` is written to the global config
+
+#### Scenario: User selects copy
+- **WHEN** user selects "Copy (smart sync)" during setup
+- **THEN** `install_method: copy` is written to the global config
+
 ### Requirement: Config command re-runs setup
 The `agentdeps config` command SHALL re-run the interactive setup with current values pre-populated.
 
@@ -44,8 +59,8 @@ The `agentdeps config` command SHALL re-run the interactive setup with current v
 - **WHEN** user runs `agentdeps config` with an existing config
 - **THEN** the setup wizard shows current values as defaults, and saves any modifications
 
-### Requirement: Setup uses Charm huh library
-The interactive setup SHALL use the `charmbracelet/huh` library for TUI form components.
+### Requirement: Setup uses @clack/prompts library
+The interactive setup SHALL use the `@clack/prompts` library for TUI form components.
 
 #### Scenario: Non-interactive environment
 - **WHEN** the tool detects it is running in a non-interactive terminal (no TTY)

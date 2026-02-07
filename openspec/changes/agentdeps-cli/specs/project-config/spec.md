@@ -1,19 +1,35 @@
 ## ADDED Requirements
 
 ### Requirement: Project agents.yaml defines dependencies
-The project-level `agents.yaml` file SHALL declare skill dependencies with repository, ref, and skill selection.
+The project-level `agents.yaml` file SHALL declare dependencies with repository, ref, skills selection, and agents selection.
 
 #### Scenario: Minimal dependency declaration
 - **WHEN** `agents.yaml` contains a dependency with only `repo` specified
-- **THEN** the tool uses `main` as the default ref and `"*"` (all skills) as the default skill selection
+- **THEN** the tool uses `main` as the default ref, `"*"` (all) for skills, and `"*"` (all) for agents
 
 #### Scenario: Full dependency declaration
-- **WHEN** `agents.yaml` contains a dependency with `repo`, `ref`, and a list of skill names
-- **THEN** the tool clones/pulls that specific ref and installs only the listed skills
+- **WHEN** `agents.yaml` contains a dependency with `repo`, `ref`, a list of skill names, and a list of agent names
+- **THEN** the tool clones/pulls that specific ref and installs only the listed skills and agents
 
 #### Scenario: Wildcard skill selection
 - **WHEN** a dependency has `skills: "*"`
 - **THEN** the tool installs all discovered skills from that repository
+
+#### Scenario: Wildcard agent selection
+- **WHEN** a dependency has `agents: "*"`
+- **THEN** the tool installs all discovered subagents from that repository
+
+#### Scenario: Skills only — no agents
+- **WHEN** a dependency has `skills: "*"` and `agents: false`
+- **THEN** the tool installs all discovered skills but no subagents from that repository
+
+#### Scenario: Agents only — no skills
+- **WHEN** a dependency has `skills: false` and `agents: "*"`
+- **THEN** the tool installs all discovered subagents but no skills from that repository
+
+#### Scenario: Cherry-pick skills and agents
+- **WHEN** a dependency has `skills: [frontend-design]` and `agents: [code-reviewer]`
+- **THEN** the tool installs only the listed skill and only the listed subagent
 
 ### Requirement: agents.yaml supports shorthand and full URLs
 The `repo` field in `agents.yaml` SHALL accept both shorthand (`owner/repo`) and full git URLs.
@@ -55,6 +71,10 @@ The tool SHALL validate `agents.yaml` and report clear errors for invalid config
 #### Scenario: Invalid skill name in list
 - **WHEN** a dependency lists a skill name that does not exist in the repository
 - **THEN** the tool prints a warning listing the skills that were not found, and installs the remaining valid skills
+
+#### Scenario: Invalid agent name in list
+- **WHEN** a dependency lists an agent name that does not exist in the repository's `agents/` directory
+- **THEN** the tool prints a warning listing the agents that were not found, and installs the remaining valid agents
 
 #### Scenario: Empty dependencies list
 - **WHEN** `agents.yaml` has an empty `dependencies` list
