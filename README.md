@@ -128,6 +128,7 @@ Personal dependencies that should be available in **every project** go in a glob
 
 ```
 ~/.config/agentdeps/agents.yaml      # Linux / macOS
+%APPDATA%\agentdeps\agents.yaml      # Windows
 ```
 
 Same format as the project file:
