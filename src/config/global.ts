@@ -2,8 +2,7 @@
  * Global configuration management.
  *
  * Stores user preferences at the platform-appropriate config directory:
- * - Linux: ~/.config/agentdeps/config.yaml
- * - macOS: ~/Library/Application Support/agentdeps/config.yaml
+ * - Linux/macOS: ~/.config/agentdeps/config.yaml
  * - Windows: %APPDATA%/agentdeps/config.yaml
  */
 import { parse, stringify } from "yaml";
@@ -25,14 +24,11 @@ export function getConfigDir(): string {
   const home = homedir();
   const plat = platform();
 
-  if (plat === "darwin") {
-    return join(home, "Library", "Application Support", "agentdeps");
-  }
   if (plat === "win32") {
     const appData = process.env["APPDATA"] ?? join(home, "AppData", "Roaming");
     return join(appData, "agentdeps");
   }
-  // Linux and others: use XDG_CONFIG_HOME or default
+  // Linux, macOS, and others: use XDG_CONFIG_HOME or default to ~/.config
   const xdg = process.env["XDG_CONFIG_HOME"];
   return join(xdg ?? join(home, ".config"), "agentdeps");
 }

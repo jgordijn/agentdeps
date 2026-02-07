@@ -1,0 +1,5 @@
+dependencies:
+  - repo: sickn33/antigravity-awesome-skills
+    agents: false
+    skills:
+      - bun-development

@@ -127,8 +127,7 @@ custom_agents:
 Personal dependencies that should be available in **every project** go in a global `agents.yaml` alongside your config:
 
 ```
-~/.config/agentdeps/agents.yaml      # Linux
-~/Library/Application Support/agentdeps/agents.yaml  # macOS
+~/.config/agentdeps/agents.yaml      # Linux / macOS
 ```
 
 Same format as the project file:
