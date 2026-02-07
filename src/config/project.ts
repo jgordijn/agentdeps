@@ -4,7 +4,7 @@
  * Defines dependencies with repo, ref, skills selection, and agents selection.
  */
 import { parse, stringify } from "yaml";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile, access } from "node:fs/promises";
 import { dirname } from "node:path";
 import { logWarn } from "../log/logger.ts";
 
@@ -71,13 +71,17 @@ function normalizeDependency(raw: RawDependency, index: number): Dependency {
 
 /** Check if a project agents.yaml exists at the given path */
 export async function projectConfigExists(path: string): Promise<boolean> {
-  return Bun.file(path).exists();
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Load and validate a project agents.yaml file */
 export async function loadProjectConfig(path: string): Promise<ProjectConfig> {
-  const file = Bun.file(path);
-  const content = await file.text();
+  const content = await readFile(path, "utf-8");
   const raw = parse(content) as Record<string, unknown> | null;
 
   if (!raw || !raw["dependencies"]) {
@@ -127,5 +131,5 @@ export async function saveProjectConfig(
   };
 
   const content = stringify(yamlObj, { lineWidth: 0 });
-  await Bun.write(path, content);
+  await writeFile(path, content, "utf-8");
 }

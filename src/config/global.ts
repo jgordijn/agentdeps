@@ -7,7 +7,7 @@
  * - Windows: %APPDATA%/agentdeps/config.yaml
  */
 import { parse, stringify } from "yaml";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir, platform } from "node:os";
 import type { CustomAgentDef } from "../registry/registry.ts";
@@ -49,19 +49,24 @@ export function globalAgentsYamlPath(): string {
 
 /** Check if the global config file exists */
 export async function globalConfigExists(): Promise<boolean> {
-  return Bun.file(globalConfigPath()).exists();
+  try {
+    await access(globalConfigPath());
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Load global config from disk. Returns undefined if file doesn't exist. */
 export async function loadGlobalConfig(): Promise<GlobalConfig | undefined> {
   const path = globalConfigPath();
-  const file = Bun.file(path);
-
-  if (!(await file.exists())) {
+  try {
+    await access(path);
+  } catch {
     return undefined;
   }
 
-  const content = await file.text();
+  const content = await readFile(path, "utf-8");
   const raw = parse(content) as Record<string, unknown>;
 
   // Validate clone_method
@@ -118,5 +123,5 @@ export async function saveGlobalConfig(config: GlobalConfig): Promise<void> {
   await mkdir(dir, { recursive: true });
 
   const content = stringify(config, { lineWidth: 0 });
-  await Bun.write(globalConfigPath(), content);
+  await writeFile(globalConfigPath(), content, "utf-8");
 }

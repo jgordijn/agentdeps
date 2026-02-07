@@ -3,6 +3,10 @@
  */
 import { symlink, readlink, unlink, lstat, rm } from "node:fs/promises";
 import { platform } from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Create a symlink. On Windows, falls back to directory junction.
@@ -16,13 +20,10 @@ export async function createSymlink(
   } catch (err) {
     if (platform() === "win32") {
       // Fallback: try directory junction on Windows
-      const proc = Bun.spawn(["cmd", "/c", "mklink", "/J", linkPath, target], {
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      const exitCode = await proc.exited;
-      if (exitCode !== 0) {
-        const stderr = await new Response(proc.stderr).text();
+      try {
+        await execFileAsync("cmd", ["/c", "mklink", "/J", linkPath, target]);
+      } catch (junctionErr: unknown) {
+        const stderr = junctionErr instanceof Error ? junctionErr.message : String(junctionErr);
         throw new Error(
           `Failed to create symlink or junction at ${linkPath}. ` +
             `Consider switching to install_method: copy, or enable Developer Mode on Windows. ` +

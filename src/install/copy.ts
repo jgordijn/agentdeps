@@ -11,6 +11,7 @@ import {
   mkdir,
   rm,
   stat,
+  copyFile,
 } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
@@ -57,7 +58,7 @@ export async function smartSync(
       // Copy file if changed or missing
       const needsCopy = await fileNeedsCopy(srcPath, dstPath);
       if (needsCopy) {
-        await Bun.write(dstPath, Bun.file(srcPath));
+        await copyFile(srcPath, dstPath);
       }
     }
   }

@@ -2,11 +2,12 @@
  * Repository cache management.
  *
  * Clones/pulls git repositories to a platform-appropriate cache directory.
- * Uses Bun.spawn() for subprocess execution per Bun skill guidelines.
+ * Uses Node.js child_process for subprocess execution.
  */
 import { join } from "node:path";
 import { homedir, platform } from "node:os";
 import { mkdir, stat as fsStat } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { logError } from "../log/logger.ts";
 
 /** Get the platform-appropriate cache directory for agentdeps repos */
@@ -31,24 +32,34 @@ async function runGit(
   args: string[],
   cwd?: string
 ): Promise<{ success: boolean; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(["git", ...args], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
+  return new Promise((resolve) => {
+    const proc = spawn("git", args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+
+    proc.stdout!.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+    proc.stderr!.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+
+    proc.on("close", (exitCode) => {
+      resolve({
+        success: exitCode === 0,
+        stdout: Buffer.concat(stdoutChunks).toString().trim(),
+        stderr: Buffer.concat(stderrChunks).toString().trim(),
+      });
+    });
+
+    proc.on("error", () => {
+      resolve({
+        success: false,
+        stdout: "",
+        stderr: "Failed to spawn git process",
+      });
+    });
   });
-
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-
-  const exitCode = await proc.exited;
-
-  return {
-    success: exitCode === 0,
-    stdout: stdout.trim(),
-    stderr: stderr.trim(),
-  };
 }
 
 /** Check if git is available in PATH */
