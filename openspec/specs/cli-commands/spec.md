@@ -5,7 +5,7 @@ The CLI SHALL provide an `install` command that reads dependency configurations,
 
 #### Scenario: Install with project agents.yaml
 - **WHEN** user runs `agentdeps install` in a directory containing `agents.yaml`
-- **THEN** the tool processes all dependencies, caches repos, and installs skills into `skills/managed/` and subagents into `agents/managed/` for each configured agent
+- **THEN** the tool processes all dependencies, caches repos, and installs skills into `skills/_agentdeps_managed/` and subagents into `agents/_agentdeps_managed/` for each configured agent
 
 #### Scenario: Install without agents.yaml
 - **WHEN** user runs `agentdeps install` in a directory without `agents.yaml`
@@ -47,7 +47,7 @@ The CLI SHALL provide a `remove <repo>` command that removes a dependency from `
 
 #### Scenario: Remove an existing dependency
 - **WHEN** user runs `agentdeps remove my-org/my-repo`
-- **THEN** the tool removes the dependency from `agents.yaml` and deletes all installed items in `managed/` directories that came from that repo
+- **THEN** the tool removes the dependency from `agents.yaml` and deletes all installed items in `_agentdeps_managed/` directories that came from that repo
 
 #### Scenario: Remove a non-existent dependency
 - **WHEN** user runs `agentdeps remove my-org/unknown-repo`

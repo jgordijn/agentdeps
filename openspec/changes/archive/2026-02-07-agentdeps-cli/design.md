@@ -58,11 +58,11 @@ Alternatives considered:
 
 **Rationale:** YAML is the natural choice for this audience (devops, k8s, CI/CD users). It's readable, supports comments (unlike JSON), and doesn't require quoting keys (unlike TOML for nested structures). The `yaml` npm package handles parsing and serialization.
 
-### 4. `managed/` subdirectory convention
+### 4. `_agentdeps_managed/` subdirectory convention
 
-**Decision:** All tool-managed items go into `<agent-dir>/skills/managed/` and `<agent-dir>/agents/managed/` (e.g., `.pi/skills/managed/my-skill`, `.pi/agents/managed/my-agent`).
+**Decision:** All tool-managed items go into `<agent-dir>/skills/_agentdeps_managed/` and `<agent-dir>/agents/_agentdeps_managed/` (e.g., `.pi/skills/_agentdeps_managed/my-skill`, `.pi/agents/_agentdeps_managed/my-agent`).
 
-**Rationale:** This cleanly separates tool-managed items from manually installed ones. The tool owns everything inside `managed/` and can safely prune it. Both pi and opencode support nested skill directories, so discovery works. Users `.gitignore` the `managed/` folder when using link mode (symlinks point to the local cache and aren't portable), or may choose to commit them in copy mode.
+**Rationale:** This cleanly separates tool-managed items from manually installed ones. The tool owns everything inside `_agentdeps_managed/` and can safely prune it. Both pi and opencode support nested skill directories, so discovery works. Users `.gitignore` the `_agentdeps_managed/` folder when using link mode (symlinks point to the local cache and aren't portable), or may choose to commit them in copy mode.
 
 ### 5. Cache directory structure
 
@@ -110,7 +110,7 @@ Full URLs in `agents.yaml` override the clone method (if someone writes `git@git
 
 **Decision:** Global config `install_method` setting controls whether items are symlinked (default) or copied with smart sync.
 
-**Rationale:** Symlinks are fast and avoid duplication, but don't work in all environments (Docker bind mounts, restrictive Windows, network filesystems). Copy mode makes `managed/` self-contained and portable. Smart sync means on each install: add new files, overwrite changed files, delete files/directories that no longer exist in the source. Both methods use the same `managed/` directory and pruning logic.
+**Rationale:** Symlinks are fast and avoid duplication, but don't work in all environments (Docker bind mounts, restrictive Windows, network filesystems). Copy mode makes `_agentdeps_managed/` self-contained and portable. Smart sync means on each install: add new files, overwrite changed files, delete files/directories that no longer exist in the source. Both methods use the same `_agentdeps_managed/` directory and pruning logic.
 
 ### 12. Built-in agent registry with user-extensible custom agents
 

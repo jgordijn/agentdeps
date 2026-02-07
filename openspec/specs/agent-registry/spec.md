@@ -35,7 +35,7 @@ Agents that use the same `.agents/skills/` and `.agents/agents/` convention SHAL
 
 #### Scenario: Deduplication of universal project paths
 - **WHEN** multiple universal agents are selected (e.g., opencode and codex)
-- **THEN** only one set of items is installed in `.agents/skills/managed/` and `.agents/agents/managed/` (not duplicated)
+- **THEN** only one set of items is installed in `.agents/skills/_agentdeps_managed/` and `.agents/agents/_agentdeps_managed/` (not duplicated)
 
 ### Requirement: Unknown agent identifier rejected
 The tool SHALL reject unknown agent identifiers during configuration unless they are defined as custom agents.

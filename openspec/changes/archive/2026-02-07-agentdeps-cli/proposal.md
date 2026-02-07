@@ -9,8 +9,8 @@ Agent skills and agent configs are scattered across repositories, but there's no
 - A global `~/.config/agentdeps/agents.yaml` provides personal/global dependencies, installed implicitly alongside project dependencies
 - A global `~/.config/agentdeps/config.yaml` stores user preferences (clone method, target agents, install method, custom agent definitions), created via interactive first-run setup
 - Repositories are cloned/pulled to `~/.cache/agentdeps/repos/<owner>-<repo>-<ref>/` (platform-appropriate via `env.HOME` / XDG conventions)
-- Skills are installed into `<agent-dir>/skills/managed/` and subagents into `<agent-dir>/agents/managed/` (e.g., `.pi/skills/managed/`, `.pi/agents/managed/`)
-- The `managed/` subdirectories are fully owned by the tool — stale entries are pruned automatically on every `install`
+- Skills are installed into `<agent-dir>/skills/_agentdeps_managed/` and subagents into `<agent-dir>/agents/_agentdeps_managed/` (e.g., `.pi/skills/_agentdeps_managed/`, `.pi/agents/_agentdeps_managed/`)
+- The `_agentdeps_managed/` subdirectories are fully owned by the tool — stale entries are pruned automatically on every `install`
 - Cross-platform: Linux, macOS, Windows
 - Zero-install usage via `npx agentdeps install` — no binary downloads needed
 
@@ -101,10 +101,10 @@ Custom agents appear alongside built-in agents in the interactive setup and can 
 
 The global config has an `install_method` setting (`link` or `copy`, default `link`):
 
-- **`link` (default)**: Items are symlinked from `managed/` into the cached repo. Fast, no duplication, but symlinks may not work in all environments (e.g., some Docker setups, restrictive Windows configurations).
-- **`copy`**: Items are copied from the cached repo into `managed/`. The tool performs a smart sync — on each `install` it compares the source and destination, adds new files, updates changed files, and removes files/directories that no longer exist in the source. This makes `managed/` self-contained and portable.
+- **`link` (default)**: Items are symlinked from `_agentdeps_managed/` into the cached repo. Fast, no duplication, but symlinks may not work in all environments (e.g., some Docker setups, restrictive Windows configurations).
+- **`copy`**: Items are copied from the cached repo into `_agentdeps_managed/`. The tool performs a smart sync — on each `install` it compares the source and destination, adds new files, updates changed files, and removes files/directories that no longer exist in the source. This makes `_agentdeps_managed/` self-contained and portable.
 
-Both methods use the same `managed/` directory convention and the same pruning logic for stale entries.
+Both methods use the same `_agentdeps_managed/` directory convention and the same pruning logic for stale entries.
 
 ## Capabilities
 
@@ -116,7 +116,7 @@ Both methods use the same `managed/` directory convention and the same pruning l
 - `interactive-setup`: First-run interactive TUI that asks the user for clone method (SSH/HTTPS), which agents they use, and install method (link/copy), then persists to global config
 - `repo-cache`: Git clone and pull operations to `~/.cache/agentdeps/repos/`, keyed by `<owner>-<repo>-<ref>`, supporting branches, tags, and commit SHAs via the `ref` field
 - `discovery`: Scanning cached repositories for skills (`skills/` subdirectories containing `SKILL.md`) and subagents (`agents/` subdirectories containing agent definition files)
-- `install-management`: Creating and pruning items in each agent's `skills/managed/` and `agents/managed/` directories via symlinks or smart copy sync, depending on global config
+- `install-management`: Creating and pruning items in each agent's `skills/_agentdeps_managed/` and `agents/_agentdeps_managed/` directories via symlinks or smart copy sync, depending on global config
 - `agent-registry`: Built-in registry of supported coding agents with their skill and subagent directory paths — defaults to `.agents/skills/` and `.agents/agents/` with per-agent overrides for pi, claude-code, cursor, etc. Users can extend with custom agent definitions in global config.
 
 ### Modified Capabilities
@@ -127,6 +127,6 @@ _(none — greenfield project)_
 
 - **New project**: Entirely new TypeScript CLI tool built with Bun, no existing code affected
 - **Dependencies**: Bun runtime + `@clack/prompts` (interactive TUI) + `yaml` (YAML parsing) + `commander` (CLI framework) + `git` CLI (shelled out)
-- **File system**: Creates `managed/` subdirectories inside agent skill and subagent folders; users should `.gitignore` these (for link mode) or may choose to commit them (for copy mode)
+- **File system**: Creates `_agentdeps_managed/` subdirectories inside agent skill and subagent folders; users should `.gitignore` these (for link mode) or may choose to commit them (for copy mode)
 - **Git**: Clones repositories to user cache; respects existing git credential helpers and SSH config
 - **Distribution**: Published to npm as `agentdeps`; usable instantly via `npx agentdeps <command>` or installed globally via `npm install -g agentdeps`. Updates via `npm update`. No binary compilation, no install scripts, no GoReleaser needed

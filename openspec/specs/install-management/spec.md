@@ -1,41 +1,41 @@
 ## ADDED Requirements
 
 ### Requirement: Install items for project dependencies
-The tool SHALL install items from the cached repository into each configured agent's project `skills/managed/` and `agents/managed/` directories.
+The tool SHALL install items from the cached repository into each configured agent's project `skills/_agentdeps_managed/` and `agents/_agentdeps_managed/` directories.
 
 #### Scenario: Skill installation for pi
 - **WHEN** pi is a configured agent and skill `frontend-design` is resolved from `vercel-labs/agent-skills`
-- **THEN** `frontend-design` is installed at `.pi/skills/managed/frontend-design` (via symlink or copy depending on install method)
+- **THEN** `frontend-design` is installed at `.pi/skills/_agentdeps_managed/frontend-design` (via symlink or copy depending on install method)
 
 #### Scenario: Subagent installation for pi
 - **WHEN** pi is a configured agent and subagent `code-reviewer` is resolved from a dependency
-- **THEN** `code-reviewer` is installed at `.pi/agents/managed/code-reviewer`
+- **THEN** `code-reviewer` is installed at `.pi/agents/_agentdeps_managed/code-reviewer`
 
 #### Scenario: Skill installation for opencode
 - **WHEN** opencode is a configured agent and skill `frontend-design` is resolved
-- **THEN** `frontend-design` is installed at `.agents/skills/managed/frontend-design`
+- **THEN** `frontend-design` is installed at `.agents/skills/_agentdeps_managed/frontend-design`
 
 #### Scenario: Managed directory created automatically
-- **WHEN** the `managed/` subdirectory does not exist under the agent's skill or agents directory
+- **WHEN** the `_agentdeps_managed/` subdirectory does not exist under the agent's skill or agents directory
 - **THEN** the tool creates it (including parent directories) before installing items
 
 ### Requirement: Install items for global dependencies
-The tool SHALL install items from the cached repository into each configured agent's global `skills/managed/` and `agents/managed/` directories for dependencies declared in the global `agents.yaml`.
+The tool SHALL install items from the cached repository into each configured agent's global `skills/_agentdeps_managed/` and `agents/_agentdeps_managed/` directories for dependencies declared in the global `agents.yaml`.
 
 #### Scenario: Global skill for pi
 - **WHEN** pi is configured and a global dependency provides skill `my-skill`
-- **THEN** `my-skill` is installed at `~/.pi/agent/skills/managed/my-skill`
+- **THEN** `my-skill` is installed at `~/.pi/agent/skills/_agentdeps_managed/my-skill`
 
 #### Scenario: Global subagent for pi
 - **WHEN** pi is configured and a global dependency provides subagent `my-agent`
-- **THEN** `my-agent` is installed at `~/.pi/agent/agents/managed/my-agent`
+- **THEN** `my-agent` is installed at `~/.pi/agent/agents/_agentdeps_managed/my-agent`
 
 ### Requirement: Link install method creates symlinks
 When `install_method` is `link` (the default), the tool SHALL create symlinks pointing to the cached repository.
 
 #### Scenario: Symlink creation
 - **WHEN** install method is `link` and skill `frontend-design` is installed for pi
-- **THEN** a symlink is created at `.pi/skills/managed/frontend-design` pointing to `<cache-dir>/agentdeps/repos/vercel-labs-agent-skills-main/skills/frontend-design`
+- **THEN** a symlink is created at `.pi/skills/_agentdeps_managed/frontend-design` pointing to `<cache-dir>/agentdeps/repos/vercel-labs-agent-skills-main/skills/frontend-design`
 
 #### Scenario: Windows symlink fallback to junction
 - **WHEN** `os.symlink` fails on Windows (e.g., Developer Mode not enabled)
@@ -50,7 +50,7 @@ When `install_method` is `copy`, the tool SHALL copy files from the cached repos
 
 #### Scenario: Initial copy
 - **WHEN** install method is `copy` and a skill is installed for the first time
-- **THEN** the entire skill directory is copied from the cache into `managed/`
+- **THEN** the entire skill directory is copied from the cache into `_agentdeps_managed/`
 
 #### Scenario: Sync adds new files
 - **WHEN** a previously installed skill has new files added in the source
@@ -69,26 +69,26 @@ When `install_method` is `copy`, the tool SHALL copy files from the cached repos
 - **THEN** that subdirectory and all its contents are removed from the destination on the next install
 
 ### Requirement: Prune stale items
-The tool SHALL remove items from `managed/` directories that no longer correspond to any resolved dependency.
+The tool SHALL remove items from `_agentdeps_managed/` directories that no longer correspond to any resolved dependency.
 
 #### Scenario: Dependency removed from agents.yaml
 - **WHEN** a repo is removed from `agents.yaml` and `agentdeps install` is run
-- **THEN** all items in `managed/` that came from that repo are removed
+- **THEN** all items in `_agentdeps_managed/` that came from that repo are removed
 
 #### Scenario: Skill removed from dependency list
 - **WHEN** a dependency changes from `skills: "*"` to `skills: [only-this-one]`
-- **THEN** items for all other skills from that repo are removed from `skills/managed/`
+- **THEN** items for all other skills from that repo are removed from `skills/_agentdeps_managed/`
 
 #### Scenario: Agent removed from dependency list
 - **WHEN** a dependency changes from `agents: "*"` to `agents: false`
-- **THEN** all subagents from that repo are removed from `agents/managed/`
+- **THEN** all subagents from that repo are removed from `agents/_agentdeps_managed/`
 
 #### Scenario: Prune across all agents
 - **WHEN** stale items exist in multiple agent directories
-- **THEN** the tool prunes stale items from all configured agents' `managed/` directories
+- **THEN** the tool prunes stale items from all configured agents' `_agentdeps_managed/` directories
 
 #### Scenario: Only managed items are pruned
-- **WHEN** `managed/` contains entries
+- **WHEN** `_agentdeps_managed/` contains entries
 - **THEN** the tool only removes entries that no longer match any resolved dependency, leaving other entries untouched
 
 ### Requirement: Idempotent installation

@@ -16,7 +16,7 @@ A global `agents.yaml` at `~/.config/agentdeps/agents.yaml` SHALL define persona
 
 #### Scenario: Global dependencies installed to global agent paths
 - **WHEN** the global `agents.yaml` contains dependencies
-- **THEN** skills and subagents are installed to the global directories for each configured agent (e.g., `~/.pi/agent/skills/managed/` and `~/.pi/agent/agents/managed/` for pi)
+- **THEN** skills and subagents are installed to the global directories for each configured agent (e.g., `~/.pi/agent/skills/_agentdeps_managed/` and `~/.pi/agent/agents/_agentdeps_managed/` for pi)
 
 #### Scenario: Global dependencies installed implicitly
 - **WHEN** user runs `agentdeps install` in any directory
@@ -42,7 +42,7 @@ The `agents` list in global config SHALL determine which agent directories recei
 
 #### Scenario: Multiple agents configured
 - **WHEN** global config has `agents: [pi, opencode]`
-- **THEN** items are installed to both pi's directories (`.pi/skills/managed/`, `.pi/agents/managed/`) and opencode's directories (`.agents/skills/managed/`, `.agents/agents/managed/`) for project scope, or their respective global paths
+- **THEN** items are installed to both pi's directories (`.pi/skills/_agentdeps_managed/`, `.pi/agents/_agentdeps_managed/`) and opencode's directories (`.agents/skills/_agentdeps_managed/`, `.agents/agents/_agentdeps_managed/`) for project scope, or their respective global paths
 
 #### Scenario: Single agent configured
 - **WHEN** global config has `agents: [pi]`
@@ -53,11 +53,11 @@ The `install_method` setting SHALL control whether items are symlinked or copied
 
 #### Scenario: Link install method
 - **WHEN** `install_method` is `link` (or omitted, as it is the default)
-- **THEN** items are symlinked from `managed/` to the cached repo
+- **THEN** items are symlinked from `_agentdeps_managed/` to the cached repo
 
 #### Scenario: Copy install method
 - **WHEN** `install_method` is `copy`
-- **THEN** items are copied from the cached repo into `managed/` using smart sync (add new, update changed, remove deleted)
+- **THEN** items are copied from the cached repo into `_agentdeps_managed/` using smart sync (add new, update changed, remove deleted)
 
 ### Requirement: Custom agents in global config
 The `custom_agents` section SHALL allow users to define additional agents with custom paths.
