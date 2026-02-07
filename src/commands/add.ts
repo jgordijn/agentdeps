@@ -143,6 +143,41 @@ function normalizeRepo(repo: string): string {
   return repo.replace(/\.git$/, "").toLowerCase();
 }
 
+const SELECT_ALL = "__select_all__";
+const SELECT_NONE = "__select_none__";
+
+/**
+ * Run a multiselect prompt with "Select all" and "Select none" meta-options at the top.
+ * Returns "*" for all, false for none, or the selected item names.
+ */
+async function multiSelectWithToggle(
+  message: string,
+  items: string[]
+): Promise<"*" | string[] | false | undefined> {
+  const selected = await p.multiselect({
+    message,
+    options: [
+      { value: SELECT_ALL, label: "Select all", hint: "install everything" },
+      { value: SELECT_NONE, label: "Select none", hint: "skip all" },
+      ...items.map((name) => ({ value: name, label: name })),
+    ],
+    initialValues: [SELECT_ALL, ...items],
+    required: false,
+  });
+
+  if (p.isCancel(selected)) return undefined;
+
+  const values = selected as string[];
+
+  if (values.includes(SELECT_NONE)) return false;
+  if (values.includes(SELECT_ALL)) return "*";
+
+  const filtered = values.filter((v) => v !== SELECT_ALL && v !== SELECT_NONE);
+  if (filtered.length === 0) return false;
+  if (filtered.length === items.length) return "*";
+  return filtered;
+}
+
 /** Interactive picker for skills and agents */
 async function interactivePick(
   skills: string[],
@@ -154,43 +189,17 @@ async function interactivePick(
   } = { skills: "*", agents: "*" };
 
   if (skills.length > 0) {
-    const selected = await p.multiselect({
-      message: "Select skills to install:",
-      options: skills.map((s) => ({ value: s, label: s })),
-      initialValues: skills,
-      required: false,
-    });
-
-    if (p.isCancel(selected)) return undefined;
-
-    if ((selected as string[]).length === skills.length) {
-      result.skills = "*";
-    } else if ((selected as string[]).length === 0) {
-      result.skills = false;
-    } else {
-      result.skills = selected as string[];
-    }
+    const selected = await multiSelectWithToggle("Select skills to install:", skills);
+    if (selected === undefined) return undefined;
+    result.skills = selected;
   } else {
     result.skills = false;
   }
 
   if (agents.length > 0) {
-    const selected = await p.multiselect({
-      message: "Select agents to install:",
-      options: agents.map((a) => ({ value: a, label: a })),
-      initialValues: agents,
-      required: false,
-    });
-
-    if (p.isCancel(selected)) return undefined;
-
-    if ((selected as string[]).length === agents.length) {
-      result.agents = "*";
-    } else if ((selected as string[]).length === 0) {
-      result.agents = false;
-    } else {
-      result.agents = selected as string[];
-    }
+    const selected = await multiSelectWithToggle("Select agents to install:", agents);
+    if (selected === undefined) return undefined;
+    result.agents = selected;
   } else {
     result.agents = false;
   }
