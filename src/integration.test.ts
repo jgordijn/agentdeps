@@ -10,15 +10,16 @@ import {
   mkdir,
   rm,
   writeFile,
+  readFile,
   readdir,
   lstat,
-  readlink,
 } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ensureRepo } from "./cache/cache.ts";
 import { discoverSkills, discoverAgents, filterItems } from "./discovery/discovery.ts";
 import { syncManagedDir } from "./install/managed.ts";
+import { resetLogState, hasLoggedErrors, getLogPath } from "./log/logger.ts";
 
 let tempDir: string;
 let repoDir: string;
@@ -76,7 +77,7 @@ describe("full install flow", () => {
     const cacheDir = join(tempDir, "cache");
     await mkdir(cacheDir, { recursive: true });
 
-    const result = await ensureRepo(repoDir, "main", `test-integration`);
+    await ensureRepo(repoDir, "main", `test-integration`);
     // The ensureRepo uses its own cache dir, but we can test discovery on the repoDir directly
 
     // 2. Discover skills and agents
@@ -135,5 +136,32 @@ describe("full install flow", () => {
 
     const afterPrune = await readdir(managedSkillsDir);
     expect(afterPrune).toEqual(["my-skill"]);
+  });
+
+  it("logs errors when cache update fails but returns cached version", async () => {
+    resetLogState();
+
+    // 1. Clone successfully with the real repo
+    const result1 = await ensureRepo(repoDir, "main", "test-update-fail");
+    expect(result1.success).toBe(true);
+
+    // 2. Break the origin remote so the next fetch will fail.
+    //    updateRepo uses `git fetch origin` on the cached repo,
+    //    so we point origin at a non-existent path.
+    const cachedRepoPath = result1.path;
+    await runGit(["remote", "set-url", "origin", "/nonexistent/path"], cachedRepoPath);
+
+    // 3. Call ensureRepo again with the same cacheKey.
+    //    The cache dir exists → updateRepo → fetch fails → logError → returns cached.
+    const result2 = await ensureRepo(repoDir, "main", "test-update-fail");
+
+    // Should still succeed (uses cached version)
+    expect(result2.success).toBe(true);
+
+    // The failed update should have been logged
+    expect(hasLoggedErrors()).toBe(true);
+
+    const logContent = await readFile(getLogPath(), "utf-8");
+    expect(logContent).toContain("cache.update");
   });
 });

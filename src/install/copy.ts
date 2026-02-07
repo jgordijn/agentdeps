@@ -8,13 +8,11 @@
  */
 import {
   readdir,
-  readFile,
-  writeFile,
   mkdir,
   rm,
   stat,
-  copyFile,
 } from "node:fs/promises";
+import type { Dirent } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -33,7 +31,7 @@ export async function smartSync(
   const sourceNames = new Set(sourceEntries.map((e) => e.name));
 
   // Get dest entries (may not exist yet)
-  let destEntries: Awaited<ReturnType<typeof readdir>> = [];
+  let destEntries: Dirent<string>[] = [];
   try {
     destEntries = await readdir(destDir, { withFileTypes: true });
   } catch {
@@ -59,7 +57,7 @@ export async function smartSync(
       // Copy file if changed or missing
       const needsCopy = await fileNeedsCopy(srcPath, dstPath);
       if (needsCopy) {
-        await copyFile(srcPath, dstPath);
+        await Bun.write(dstPath, Bun.file(srcPath));
       }
     }
   }

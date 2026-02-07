@@ -4,7 +4,7 @@
  * Skills: subdirectories of `skills/` containing `SKILL.md`
  * Agents: subdirectories of `agents/`
  */
-import { readdir, access } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 /** Discover skills in a cached repo — subdirs of skills/ containing SKILL.md */
@@ -13,21 +13,17 @@ export async function discoverSkills(repoPath: string): Promise<string[]> {
 
   try {
     const entries = await readdir(skillsDir, { withFileTypes: true });
-    const skills: string[] = [];
+    const dirs = entries.filter((e) => e.isDirectory());
 
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+    // Check all SKILL.md files in parallel
+    const checks = await Promise.all(
+      dirs.map(async (entry) => {
+        const exists = await Bun.file(join(skillsDir, entry.name, "SKILL.md")).exists();
+        return exists ? entry.name : null;
+      })
+    );
 
-      // Check for SKILL.md
-      try {
-        await access(join(skillsDir, entry.name, "SKILL.md"));
-        skills.push(entry.name);
-      } catch {
-        // No SKILL.md — not a skill, skip
-      }
-    }
-
-    return skills.sort();
+    return checks.filter((name): name is string => name !== null).sort();
   } catch {
     // skills/ directory doesn't exist
     return [];

@@ -5,12 +5,19 @@ import { Command } from "commander";
 import { loadGlobalConfig, saveGlobalConfig } from "../config/global.ts";
 import { mergeCustomAgents } from "../registry/registry.ts";
 import { runSetup } from "../setup/setup.ts";
+import { logError } from "../log/logger.ts";
 
 export const configCommand = new Command("config")
   .description("Configure agentdeps (re-run interactive setup)")
   .action(async () => {
     // Load existing config if any
-    const existing = await loadGlobalConfig();
+    let existing: Awaited<ReturnType<typeof loadGlobalConfig>> = undefined;
+    try {
+      existing = await loadGlobalConfig();
+    } catch (err) {
+      logError("config.load", err);
+      console.warn("⚠ Existing config is invalid, starting fresh");
+    }
 
     // If custom agents exist, merge them so they appear in the selection
     if (existing?.custom_agents) {

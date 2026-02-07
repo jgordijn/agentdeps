@@ -8,18 +8,14 @@ import {
   saveProjectConfig,
   projectConfigExists,
 } from "../config/project.ts";
-import { loadGlobalConfig } from "../config/global.ts";
+import { requireGlobalConfig } from "../config/global.ts";
 import { runInstall } from "./install.ts";
 
 export const removeCommand = new Command("remove")
   .description("Remove a dependency from agents.yaml")
   .argument("<repo>", "Repository to remove (owner/repo or full URL)")
   .action(async (repo: string) => {
-    const config = await loadGlobalConfig();
-    if (!config) {
-      console.error("No global config found. Run `agentdeps config` first.");
-      process.exit(1);
-    }
+    const config = await requireGlobalConfig();
 
     const projectYamlPath = join(process.cwd(), "agents.yaml");
 
@@ -41,11 +37,14 @@ export const removeCommand = new Command("remove")
       process.exit(1);
     }
 
-    const removed = projectConfig.dependencies[index];
-    projectConfig.dependencies.splice(index, 1);
+    const [removed] = projectConfig.dependencies.splice(index, 1);
+    if (!removed) {
+      console.error(`✗ Unexpected error removing ${repo}`);
+      process.exit(1);
+    }
     await saveProjectConfig(projectYamlPath, projectConfig);
 
-    console.log(`✓ Removed ${removed!.repo} from agents.yaml`);
+    console.log(`✓ Removed ${removed.repo} from agents.yaml`);
 
     // Run install to prune stale items
     await runInstall(config);

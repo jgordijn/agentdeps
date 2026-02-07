@@ -20,7 +20,7 @@
     "noImplicitOverride": true,
     "forceConsistentCasingInFileNames": true,
 
-    "noUnusedLocals": false,
+    "noUnusedLocals": true,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
 

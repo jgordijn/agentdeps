@@ -141,7 +141,7 @@ const BUILT_IN_AGENTS: readonly Agent[] = [
     globalAgents: "~/.config/kimi-cli/agents",
     isUniversal: true,
   },
-] as const;
+] satisfies readonly Agent[];
 
 /** Mutable registry that can be extended with custom agents */
 let registry: Agent[] = [...BUILT_IN_AGENTS];

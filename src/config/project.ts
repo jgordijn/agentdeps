@@ -4,8 +4,9 @@
  * Defines dependencies with repo, ref, skills selection, and agents selection.
  */
 import { parse, stringify } from "yaml";
-import { mkdir, readFile, writeFile, access } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { logWarn } from "../log/logger.ts";
 
 /** A single dependency declaration */
 export interface Dependency {
@@ -43,6 +44,7 @@ function normalizeDependency(raw: RawDependency, index: number): Dependency {
   } else if (Array.isArray(raw.skills)) {
     skills = raw.skills;
   } else {
+    logWarn("config.normalize", `Dependency "${raw.repo}" has unexpected skills value (${JSON.stringify(raw.skills)}), defaulting to "*"`);
     skills = "*";
   }
 
@@ -55,6 +57,7 @@ function normalizeDependency(raw: RawDependency, index: number): Dependency {
   } else if (Array.isArray(raw.agents)) {
     agents = raw.agents;
   } else {
+    logWarn("config.normalize", `Dependency "${raw.repo}" has unexpected agents value (${JSON.stringify(raw.agents)}), defaulting to "*"`);
     agents = "*";
   }
 
@@ -68,17 +71,13 @@ function normalizeDependency(raw: RawDependency, index: number): Dependency {
 
 /** Check if a project agents.yaml exists at the given path */
 export async function projectConfigExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
+  return Bun.file(path).exists();
 }
 
 /** Load and validate a project agents.yaml file */
 export async function loadProjectConfig(path: string): Promise<ProjectConfig> {
-  const content = await readFile(path, "utf-8");
+  const file = Bun.file(path);
+  const content = await file.text();
   const raw = parse(content) as Record<string, unknown> | null;
 
   if (!raw || !raw["dependencies"]) {
@@ -128,5 +127,5 @@ export async function saveProjectConfig(
   };
 
   const content = stringify(yamlObj, { lineWidth: 0 });
-  await writeFile(path, content, "utf-8");
+  await Bun.write(path, content);
 }

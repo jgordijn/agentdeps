@@ -1,7 +1,7 @@
 /**
  * Symlink install operations.
  */
-import { symlink, readlink, unlink, lstat } from "node:fs/promises";
+import { symlink, readlink, unlink, lstat, rm } from "node:fs/promises";
 import { platform } from "node:os";
 
 /**
@@ -58,7 +58,7 @@ export async function ensureSymlink(
     }
 
     // Exists but is not a symlink — remove and create
-    await unlink(linkPath);
+    await rm(linkPath, { recursive: true, force: true });
     await createSymlink(target, linkPath);
     return "replaced";
   } catch (err: unknown) {

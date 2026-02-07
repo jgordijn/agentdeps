@@ -7,7 +7,7 @@
 import { Command } from "commander";
 import { join } from "node:path";
 import {
-  loadGlobalConfig,
+  requireGlobalConfig,
   globalAgentsYamlPath,
   type GlobalConfig,
 } from "../config/global.ts";
@@ -31,6 +31,7 @@ import {
   type LabeledAgentPaths,
 } from "../registry/registry.ts";
 import { syncManagedDir, expandHomePath } from "../install/managed.ts";
+import { logError, printLogHint } from "../log/logger.ts";
 
 /** Resolved items from a single dependency */
 interface ResolvedDep {
@@ -42,52 +43,62 @@ interface ResolvedDep {
 
 /**
  * Process a list of dependencies: cache repos, discover, and filter.
+ * Parallelizes repo caching for better performance with multiple deps.
  */
 async function resolveDeps(
   deps: readonly Dependency[],
   cloneMethod: "ssh" | "https"
 ): Promise<ResolvedDep[]> {
-  const resolved: ResolvedDep[] = [];
+  // Phase 1: Cache all repos in parallel
+  const cacheResults = await Promise.all(
+    deps.map(async (dep) => {
+      const url = resolveRepoUrl(dep.repo, cloneMethod);
+      const cacheKey = deriveCacheKey(dep.repo, dep.ref);
+      console.log(`  📦 ${dep.repo} (${dep.ref})`);
+      const result = await ensureRepo(url, dep.ref, cacheKey);
+      return { dep, result };
+    })
+  );
 
-  for (const dep of deps) {
-    const url = resolveRepoUrl(dep.repo, cloneMethod);
-    const cacheKey = deriveCacheKey(dep.repo, dep.ref);
+  // Phase 2: Discover and filter (parallel per dep)
+  const resolved = await Promise.all(
+    cacheResults.map(async ({ dep, result }) => {
+      if (!result.success) {
+        console.error(`  ✗ Failed to cache ${dep.repo}, skipping`);
+        return null;
+      }
 
-    console.log(`  📦 ${dep.repo} (${dep.ref})`);
+      // Discover (parallel — independent operations)
+      const [discoveredSkills, discoveredAgents] = await Promise.all([
+        discoverSkills(result.path),
+        discoverAgents(result.path),
+      ]);
 
-    const result = await ensureRepo(url, dep.ref, cacheKey);
-    if (!result.success) {
-      console.error(`  ✗ Failed to cache ${dep.repo}, skipping`);
-      continue;
-    }
+      // Filter
+      const skillResult = filterItems(discoveredSkills, dep.skills);
+      const agentResult = filterItems(discoveredAgents, dep.agents);
 
-    // Discover
-    const discoveredSkills = await discoverSkills(result.path);
-    const discoveredAgents = await discoverAgents(result.path);
+      // Warn on issues
+      warnDiscoveryIssues(dep.repo, "skills", discoveredSkills, dep.skills, skillResult.missing);
+      warnDiscoveryIssues(dep.repo, "agents", discoveredAgents, dep.agents, agentResult.missing);
 
-    // Filter
-    const skillResult = filterItems(discoveredSkills, dep.skills);
-    const agentResult = filterItems(discoveredAgents, dep.agents);
+      return {
+        repo: dep.repo,
+        cachePath: result.path,
+        skills: skillResult.selected.map((name) => ({
+          name,
+          sourcePath: join(result.path, "skills", name),
+        })),
+        agents: agentResult.selected.map((name) => ({
+          name,
+          sourcePath: join(result.path, "agents", name),
+        })),
+      };
+    })
+  );
 
-    // Warn on issues
-    warnDiscoveryIssues(dep.repo, "skills", discoveredSkills, dep.skills, skillResult.missing);
-    warnDiscoveryIssues(dep.repo, "agents", discoveredAgents, dep.agents, agentResult.missing);
-
-    resolved.push({
-      repo: dep.repo,
-      cachePath: result.path,
-      skills: skillResult.selected.map((name) => ({
-        name,
-        sourcePath: join(result.path, "skills", name),
-      })),
-      agents: agentResult.selected.map((name) => ({
-        name,
-        sourcePath: join(result.path, "agents", name),
-      })),
-    });
-  }
-
-  return resolved;
+  // Filter out failed deps
+  return resolved.filter((r): r is ResolvedDep => r !== null);
 }
 
 /** Per-agent install result */
@@ -176,7 +187,7 @@ function formatInstallResults(scope: string, results: AgentInstallResult[]): str
   }
 
   if (results.length === 1) {
-    const r = results[0];
+    const r = results[0]!;
     const removed = r.skillsRemoved + r.agentsRemoved;
     const parts: string[] = [];
     if (r.skillsAdded > 0) parts.push(`${r.skillsAdded} skills added`);
@@ -222,7 +233,6 @@ export async function runInstall(config: GlobalConfig): Promise<void> {
 
   // 1. Process global agents.yaml
   const globalYamlPath = globalAgentsYamlPath();
-  let hasGlobal = false;
 
   try {
     if (await projectConfigExists(globalYamlPath)) {
@@ -230,7 +240,6 @@ export async function runInstall(config: GlobalConfig): Promise<void> {
       const globalConfig = await loadProjectConfig(globalYamlPath);
 
       if (globalConfig.dependencies.length > 0) {
-        hasGlobal = true;
         const resolved = await resolveDeps(globalConfig.dependencies, config.clone_method);
 
         const results = await installToManagedDirs(resolved, labeledPaths, "global", config.install_method);
@@ -238,7 +247,8 @@ export async function runInstall(config: GlobalConfig): Promise<void> {
       }
     }
   } catch (err) {
-    // No global agents.yaml — that's fine
+    logError("global-deps", err);
+    console.warn("⚠ Failed to process global dependencies");
   }
 
   // 2. Process project agents.yaml
@@ -261,15 +271,12 @@ export async function runInstall(config: GlobalConfig): Promise<void> {
   }
 
   console.log("\n✅ Install complete");
+  printLogHint();
 }
 
 export const installCommand = new Command("install")
   .description("Install dependencies from agents.yaml")
   .action(async () => {
-    const config = await loadGlobalConfig();
-    if (!config) {
-      console.error("No global config found. Run `agentdeps config` first.");
-      process.exit(1);
-    }
+    const config = await requireGlobalConfig();
     await runInstall(config);
   });

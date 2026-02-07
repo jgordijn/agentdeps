@@ -6,7 +6,8 @@
  */
 import { join } from "node:path";
 import { homedir, platform } from "node:os";
-import { access, mkdir } from "node:fs/promises";
+import { mkdir, stat as fsStat } from "node:fs/promises";
+import { logError } from "../log/logger.ts";
 
 /** Get the platform-appropriate cache directory for agentdeps repos */
 export function getCacheDir(): string {
@@ -63,8 +64,8 @@ export async function checkGitAvailable(): Promise<boolean> {
 /** Check if a directory exists */
 async function dirExists(path: string): Promise<boolean> {
   try {
-    await access(path);
-    return true;
+    const s = await fsStat(path);
+    return s.isDirectory();
   } catch {
     return false;
   }
@@ -111,7 +112,8 @@ export async function cloneRepo(
 
 /**
  * Update an existing cached repository.
- * Fetches from origin and checks out the configured ref.
+ * Fetches from origin and resets to the configured ref.
+ * Uses `reset --hard` to avoid detached HEAD state for branch refs.
  */
 export async function updateRepo(
   repoPath: string,
@@ -123,16 +125,16 @@ export async function updateRepo(
     return { success: false, error: fetch.stderr };
   }
 
-  // Try checking out as a remote branch first (origin/<ref>)
-  const checkoutBranch = await runGit(
-    ["checkout", `origin/${ref}`],
+  // Try resetting to remote branch first (origin/<ref>)
+  const resetBranch = await runGit(
+    ["reset", "--hard", `origin/${ref}`],
     repoPath
   );
-  if (checkoutBranch.success) {
+  if (resetBranch.success) {
     return { success: true };
   }
 
-  // Fall back to tag or SHA
+  // Fall back to tag or SHA (checkout is fine for these — they're always detached)
   const checkoutRef = await runGit(["checkout", ref], repoPath);
   if (!checkoutRef.success) {
     return { success: false, error: checkoutRef.stderr };
@@ -158,7 +160,8 @@ export async function ensureRepo(
     // Update existing
     const result = await updateRepo(repoPath, ref);
     if (!result.success) {
-      console.warn(`⚠ Failed to update ${cacheKey}: ${result.error}`);
+      logError("cache.update", new Error(`Failed to update ${cacheKey}: ${result.error}`));
+      console.warn(`⚠ Failed to update ${cacheKey} (using cached version)`);
       // Continue with existing cached state
     }
     return { success: true, path: repoPath };
@@ -167,7 +170,8 @@ export async function ensureRepo(
   // Clone fresh
   const result = await cloneRepo(url, ref, cacheKey);
   if (!result.success) {
-    console.warn(`⚠ Failed to clone ${url}: ${result.error}`);
+    logError("cache.clone", new Error(`Failed to clone ${url}: ${result.error}`));
+    console.warn(`⚠ Failed to clone ${url}`);
   }
   return result;
 }

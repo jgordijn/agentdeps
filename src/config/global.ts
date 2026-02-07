@@ -7,10 +7,11 @@
  * - Windows: %APPDATA%/agentdeps/config.yaml
  */
 import { parse, stringify } from "yaml";
-import { mkdir, readFile, writeFile, access } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir, platform } from "node:os";
 import type { CustomAgentDef } from "../registry/registry.ts";
+import { logError, printLogHint } from "../log/logger.ts";
 
 export interface GlobalConfig {
   clone_method: "ssh" | "https";
@@ -28,7 +29,8 @@ export function getConfigDir(): string {
     return join(home, "Library", "Application Support", "agentdeps");
   }
   if (plat === "win32") {
-    return process.env["APPDATA"] ?? join(home, "AppData", "Roaming", "agentdeps");
+    const appData = process.env["APPDATA"] ?? join(home, "AppData", "Roaming");
+    return join(appData, "agentdeps");
   }
   // Linux and others: use XDG_CONFIG_HOME or default
   const xdg = process.env["XDG_CONFIG_HOME"];
@@ -47,28 +49,66 @@ export function globalAgentsYamlPath(): string {
 
 /** Check if the global config file exists */
 export async function globalConfigExists(): Promise<boolean> {
-  try {
-    await access(globalConfigPath());
-    return true;
-  } catch {
-    return false;
-  }
+  return Bun.file(globalConfigPath()).exists();
 }
 
 /** Load global config from disk. Returns undefined if file doesn't exist. */
 export async function loadGlobalConfig(): Promise<GlobalConfig | undefined> {
-  try {
-    const content = await readFile(globalConfigPath(), "utf-8");
-    const raw = parse(content) as Record<string, unknown>;
+  const path = globalConfigPath();
+  const file = Bun.file(path);
 
-    return {
-      clone_method: (raw["clone_method"] as "ssh" | "https") ?? "ssh",
-      agents: (raw["agents"] as string[]) ?? [],
-      install_method: (raw["install_method"] as "link" | "copy") ?? "link",
-      custom_agents: raw["custom_agents"] as Record<string, CustomAgentDef> | undefined,
-    };
-  } catch {
+  if (!(await file.exists())) {
     return undefined;
+  }
+
+  const content = await file.text();
+  const raw = parse(content) as Record<string, unknown>;
+
+  // Validate clone_method
+  const cloneMethod = raw["clone_method"] ?? "ssh";
+  if (cloneMethod !== "ssh" && cloneMethod !== "https") {
+    throw new Error(`Invalid clone_method: "${cloneMethod}". Must be "ssh" or "https".`);
+  }
+
+  // Validate install_method
+  const installMethod = raw["install_method"] ?? "link";
+  if (installMethod !== "link" && installMethod !== "copy") {
+    throw new Error(`Invalid install_method: "${installMethod}". Must be "link" or "copy".`);
+  }
+
+  // Validate agents
+  const agents = raw["agents"] ?? [];
+  if (!Array.isArray(agents)) {
+    throw new Error(`Invalid agents: expected an array, got ${typeof agents}.`);
+  }
+
+  return {
+    clone_method: cloneMethod,
+    agents: agents as string[],
+    install_method: installMethod,
+    custom_agents: raw["custom_agents"] as Record<string, CustomAgentDef> | undefined,
+  };
+}
+
+/**
+ * Load global config with CLI-appropriate error handling.
+ * Returns the config, or logs and exits on missing/invalid config.
+ */
+export async function requireGlobalConfig(): Promise<GlobalConfig> {
+  try {
+    const config = await loadGlobalConfig();
+    if (!config) {
+      console.error("✗ No global config found. Run `agentdeps config` first.");
+      process.exit(1);
+    }
+    return config;
+  } catch (err) {
+    logError("config", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`✗ Invalid config at ${globalConfigPath()}: ${msg}`);
+    console.error(`  Run \`agentdeps config\` to fix it.`);
+    printLogHint();
+    process.exit(1);
   }
 }
 
@@ -78,5 +118,5 @@ export async function saveGlobalConfig(config: GlobalConfig): Promise<void> {
   await mkdir(dir, { recursive: true });
 
   const content = stringify(config, { lineWidth: 0 });
-  await writeFile(globalConfigPath(), content, "utf-8");
+  await Bun.write(globalConfigPath(), content);
 }

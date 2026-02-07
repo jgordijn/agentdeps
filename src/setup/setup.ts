@@ -8,10 +8,8 @@
  */
 import * as p from "@clack/prompts";
 import {
-  allAgents,
   universalAgents,
   nonUniversalAgents,
-  type Agent,
 } from "../registry/registry.ts";
 import type { GlobalConfig } from "../config/global.ts";
 

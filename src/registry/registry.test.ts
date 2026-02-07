@@ -126,9 +126,6 @@ describe("resolveAgentPaths", () => {
   it("deduplicates universal project paths", () => {
     const paths = resolveAgentPaths(["opencode", "codex"]);
     // Both share .agents/skills and .agents/agents at project scope
-    // Should have unique project paths
-    const projectSkillsPaths = paths.map((p) => p.projectSkills);
-    const uniqueProjectSkills = new Set(projectSkillsPaths);
     // We expect deduplication — 1 unique project path but 2 global entries
     expect(paths.length).toBeLessThanOrEqual(2);
   });

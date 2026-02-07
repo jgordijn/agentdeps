@@ -10,7 +10,7 @@ import {
   projectConfigExists,
   type Dependency,
 } from "../config/project.ts";
-import { loadGlobalConfig } from "../config/global.ts";
+import { requireGlobalConfig } from "../config/global.ts";
 import { resolveRepoUrl, deriveCacheKey } from "../cache/url.ts";
 import { ensureRepo } from "../cache/cache.ts";
 import { discoverSkills, discoverAgents } from "../discovery/discovery.ts";
@@ -28,11 +28,7 @@ export const addCommand = new Command("add")
   .option("--no-skills", "Don't install any skills")
   .option("--no-agents", "Don't install any agents")
   .action(async (repo: string, options) => {
-    const config = await loadGlobalConfig();
-    if (!config) {
-      console.error("No global config found. Run `agentdeps config` first.");
-      process.exit(1);
-    }
+    const config = await requireGlobalConfig();
 
     const projectYamlPath = join(process.cwd(), "agents.yaml");
 
@@ -61,8 +57,10 @@ export const addCommand = new Command("add")
       process.exit(1);
     }
 
-    const discoveredSkills = await discoverSkills(result.path);
-    const discoveredAgents = await discoverAgents(result.path);
+    const [discoveredSkills, discoveredAgents] = await Promise.all([
+      discoverSkills(result.path),
+      discoverAgents(result.path),
+    ]);
 
     console.log(
       `  Found ${discoveredSkills.length} skill(s), ${discoveredAgents.length} agent(s)`
@@ -105,12 +103,12 @@ export const addCommand = new Command("add")
       }
     } else {
       // Interactive picker
-      const result = await interactivePick(discoveredSkills, discoveredAgents);
-      if (!result) {
+      const pickResult = await interactivePick(discoveredSkills, discoveredAgents);
+      if (!pickResult) {
         return; // Cancelled
       }
-      skills = result.skills;
-      agents = result.agents;
+      skills = pickResult.skills;
+      agents = pickResult.agents;
     }
 
     // Build dependency

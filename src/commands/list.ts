@@ -9,18 +9,14 @@ import {
   type Dependency,
 } from "../config/project.ts";
 import {
-  loadGlobalConfig,
+  requireGlobalConfig,
   globalAgentsYamlPath,
 } from "../config/global.ts";
 
 export const listCommand = new Command("list")
   .description("List installed dependencies")
   .action(async () => {
-    const config = await loadGlobalConfig();
-    if (!config) {
-      console.error("No global config found. Run `agentdeps config` first.");
-      process.exit(1);
-    }
+    const config = await requireGlobalConfig();
 
     let hasDeps = false;
 

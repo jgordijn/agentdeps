@@ -5,7 +5,6 @@ import { Command } from "commander";
 import { checkGitAvailable } from "../cache/cache.ts";
 import {
   globalConfigExists,
-  loadGlobalConfig,
   saveGlobalConfig,
 } from "../config/global.ts";
 import { isInteractive, runSetup } from "../setup/setup.ts";
@@ -23,14 +22,14 @@ export const program = new Command()
   );
 
 // Commands that need git and config
-const commandsNeedingPrecheck = ["install", "add", "remove", "list"];
+const commandsNeedingPrecheck = new Set(["install", "add", "remove", "list"]);
 
 // Pre-action hook for commands that need git and config
 program.hook("preAction", async (thisCommand, actionCommand) => {
   const cmdName = actionCommand.name();
 
   // Skip prechecks for config and help
-  if (!commandsNeedingPrecheck.includes(cmdName)) {
+  if (!commandsNeedingPrecheck.has(cmdName)) {
     return;
   }
 
