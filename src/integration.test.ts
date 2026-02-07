@@ -39,7 +39,7 @@ beforeEach(async () => {
 
   // Create a local git repo with skills and agents
   await mkdir(repoDir, { recursive: true });
-  await runGit(["init"], repoDir);
+  await runGit(["init", "-b", "main"], repoDir);
   await runGit(["config", "user.email", "test@test.com"], repoDir);
   await runGit(["config", "user.name", "Test"], repoDir);
 
