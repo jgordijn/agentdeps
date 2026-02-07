@@ -122,9 +122,50 @@ custom_agents:
     global_agents: ~/.my-agent/agents
 ```
 
-### Global dependencies
+### Global Skills & Agents
 
-Personal dependencies go in `~/.config/agentdeps/agents.yaml` — same format as the project file. They're installed to global agent directories automatically.
+Personal dependencies that should be available in **every project** go in a global `agents.yaml` alongside your config:
+
+```
+~/.config/agentdeps/agents.yaml      # Linux
+~/Library/Application Support/agentdeps/agents.yaml  # macOS
+```
+
+Same format as the project file:
+
+```yaml
+dependencies:
+  - repo: my-org/my-skills-repo
+
+  - repo: my-org/another-repo
+    skills:
+      - kotlin-conventions
+    agents: false
+```
+
+When you run `agentdeps install`, both global and project dependencies are processed:
+
+1. **Global deps** → installed to each agent's **global** directories (e.g., `~/.pi/agent/skills/`, `~/.claude/skills/`)
+2. **Project deps** → installed to each agent's **project** directories (e.g., `.pi/skills/`, `.claude/skills/`)
+
+Global skills are available everywhere — no need to add the same dependency to every project.
+
+#### Global paths per agent
+
+| Agent | Global Skills | Global Agents |
+|---|---|---|
+| Pi | `~/.pi/agent/skills` | `~/.pi/agent/agents` |
+| Claude Code | `~/.claude/skills` | `~/.claude/agents` |
+| Cursor | `~/.cursor/skills` | `~/.cursor/agents` |
+| Roo | `~/.roo/skills` | `~/.roo/agents` |
+| Cline | `~/.cline/skills` | `~/.cline/agents` |
+| Windsurf | `~/.windsurf/skills` | `~/.windsurf/agents` |
+| OpenCode | `~/.config/opencode/skills` | `~/.config/opencode/agents` |
+| Codex | `~/.config/codex/skills` | `~/.config/codex/agents` |
+| Amp | `~/.config/amp/skills` | `~/.config/amp/agents` |
+| Gemini CLI | `~/.config/gemini-cli/skills` | `~/.config/gemini-cli/agents` |
+| GitHub Copilot | `~/.config/github-copilot/skills` | `~/.config/github-copilot/agents` |
+| Kimi CLI | `~/.config/kimi-cli/skills` | `~/.config/kimi-cli/agents` |
 
 ## Repo Layout Convention
 
