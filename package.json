@@ -1,6 +1,6 @@
 {
   "name": "agentdeps",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Declarative dependency manager for AI coding agent skills and subagents",
   "module": "src/index.ts",
   "type": "module",
