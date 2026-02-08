@@ -23,6 +23,7 @@ import {
   discoverAgents,
   filterItems,
   warnDiscoveryIssues,
+  type DiscoveredItem,
 } from "../discovery/discovery.ts";
 import {
   mergeCustomAgents,
@@ -37,8 +38,8 @@ import { logError, printLogHint } from "../log/logger.ts";
 interface ResolvedDep {
   repo: string;
   cachePath: string;
-  skills: Array<{ name: string; sourcePath: string }>;
-  agents: Array<{ name: string; sourcePath: string }>;
+  skills: DiscoveredItem[];
+  agents: DiscoveredItem[];
 }
 
 /**
@@ -85,14 +86,8 @@ async function resolveDeps(
       return {
         repo: dep.repo,
         cachePath: result.path,
-        skills: skillResult.selected.map((name) => ({
-          name,
-          sourcePath: join(result.path, "skills", name),
-        })),
-        agents: agentResult.selected.map((name) => ({
-          name,
-          sourcePath: join(result.path, "agents", name),
-        })),
+        skills: skillResult.selected,
+        agents: agentResult.selected,
       };
     })
   );

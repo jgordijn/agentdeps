@@ -17,24 +17,36 @@ import type { Dirent } from "node:fs";
 import { join } from "node:path";
 
 /**
- * Recursively sync sourceDir to destDir.
- * After sync, destDir mirrors sourceDir exactly.
+ * Sync source to dest. Handles both files and directories.
+ * - If source is a file, copies it directly to dest.
+ * - If source is a directory, recursively syncs so dest mirrors source exactly.
  */
 export async function smartSync(
-  sourceDir: string,
-  destDir: string
+  source: string,
+  dest: string
 ): Promise<void> {
-  // Ensure dest exists
-  await mkdir(destDir, { recursive: true });
+  const srcStat = await stat(source);
+
+  if (srcStat.isFile()) {
+    // Single file sync
+    const needsCopy = await fileNeedsCopy(source, dest);
+    if (needsCopy) {
+      await copyFile(source, dest);
+    }
+    return;
+  }
+
+  // Directory sync
+  await mkdir(dest, { recursive: true });
 
   // Get source entries
-  const sourceEntries = await readdir(sourceDir, { withFileTypes: true });
+  const sourceEntries = await readdir(source, { withFileTypes: true });
   const sourceNames = new Set(sourceEntries.map((e) => e.name));
 
   // Get dest entries (may not exist yet)
   let destEntries: Dirent<string>[] = [];
   try {
-    destEntries = await readdir(destDir, { withFileTypes: true });
+    destEntries = await readdir(dest, { withFileTypes: true });
   } catch {
     // Dest doesn't exist yet, that's fine
   }
@@ -42,20 +54,18 @@ export async function smartSync(
   // Remove items in dest that are not in source
   for (const entry of destEntries) {
     if (!sourceNames.has(entry.name)) {
-      await rm(join(destDir, entry.name), { recursive: true, force: true });
+      await rm(join(dest, entry.name), { recursive: true, force: true });
     }
   }
 
   // Sync source items
   for (const entry of sourceEntries) {
-    const srcPath = join(sourceDir, entry.name);
-    const dstPath = join(destDir, entry.name);
+    const srcPath = join(source, entry.name);
+    const dstPath = join(dest, entry.name);
 
     if (entry.isDirectory()) {
-      // Recurse into subdirectories
       await smartSync(srcPath, dstPath);
     } else if (entry.isFile()) {
-      // Copy file if changed or missing
       const needsCopy = await fileNeedsCopy(srcPath, dstPath);
       if (needsCopy) {
         await copyFile(srcPath, dstPath);

@@ -1,5 +1,11 @@
 dependencies:
   - repo: sickn33/antigravity-awesome-skills
-    agents: false
     skills:
       - bun-development
+    agents: false
+  - repo: RoyalAholdDelhaize/ai-agent-instructions
+    ref: plugin
+    skills:
+      - agent-builder
+    agents:
+      - architect-reviewer

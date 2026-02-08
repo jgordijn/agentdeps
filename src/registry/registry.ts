@@ -90,11 +90,11 @@ const BUILT_IN_AGENTS: readonly Agent[] = [
   {
     name: "opencode",
     displayName: "OpenCode",
-    projectSkills: UNIVERSAL_PROJECT_SKILLS,
-    projectAgents: UNIVERSAL_PROJECT_AGENTS,
+    projectSkills: ".opencode/skills",
+    projectAgents: ".opencode/agents",
     globalSkills: "~/.config/opencode/skills",
     globalAgents: "~/.config/opencode/agents",
-    isUniversal: true,
+    isUniversal: false,
   },
   {
     name: "codex",

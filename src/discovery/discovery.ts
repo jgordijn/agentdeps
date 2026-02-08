@@ -2,13 +2,19 @@
  * Discovery — scans cached repositories for skills and subagents.
  *
  * Skills: subdirectories of `skills/` containing `SKILL.md`
- * Agents: subdirectories of `agents/`
+ * Agents: subdirectories of `agents/`, or `.md` files directly in `agents/`
  */
 import { readdir, access } from "node:fs/promises";
 import { join } from "node:path";
 
+/** A discovered item with its name and source path */
+export interface DiscoveredItem {
+  name: string;
+  sourcePath: string;
+}
+
 /** Discover skills in a cached repo — subdirs of skills/ containing SKILL.md */
-export async function discoverSkills(repoPath: string): Promise<string[]> {
+export async function discoverSkills(repoPath: string): Promise<DiscoveredItem[]> {
   const skillsDir = join(repoPath, "skills");
 
   try {
@@ -25,27 +31,45 @@ export async function discoverSkills(repoPath: string): Promise<string[]> {
         } catch {
           exists = false;
         }
-        return exists ? entry.name : null;
+        return exists
+          ? { name: entry.name, sourcePath: join(skillsDir, entry.name) }
+          : null;
       })
     );
 
-    return checks.filter((name): name is string => name !== null).sort();
+    return checks
+      .filter((item): item is DiscoveredItem => item !== null)
+      .sort((a, b) => a.name.localeCompare(b.name));
   } catch {
     // skills/ directory doesn't exist
     return [];
   }
 }
 
-/** Discover subagents in a cached repo — subdirs of agents/ */
-export async function discoverAgents(repoPath: string): Promise<string[]> {
+/**
+ * Discover subagents in a cached repo.
+ *
+ * Supports two layouts:
+ * - Directory-based: `agents/<name>/` (any subdirectory)
+ * - File-based: `agents/<name>.md` (markdown files, name = filename without extension)
+ */
+export async function discoverAgents(repoPath: string): Promise<DiscoveredItem[]> {
   const agentsDir = join(repoPath, "agents");
 
   try {
     const entries = await readdir(agentsDir, { withFileTypes: true });
-    return entries
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name)
-      .sort();
+    const agents: DiscoveredItem[] = [];
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        agents.push({ name: entry.name, sourcePath: join(agentsDir, entry.name) });
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        const name = entry.name.replace(/\.md$/, "");
+        agents.push({ name, sourcePath: join(agentsDir, entry.name) });
+      }
+    }
+
+    return agents.sort((a, b) => a.name.localeCompare(b.name));
   } catch {
     // agents/ directory doesn't exist
     return [];
@@ -62,9 +86,9 @@ export async function discoverAgents(repoPath: string): Promise<string[]> {
  * Returns { selected, missing } where missing lists items requested but not found.
  */
 export function filterItems(
-  discovered: readonly string[],
+  discovered: readonly DiscoveredItem[],
   selection: "*" | string[] | false
-): { selected: string[]; missing: string[] } {
+): { selected: DiscoveredItem[]; missing: string[] } {
   if (selection === false) {
     return { selected: [], missing: [] };
   }
@@ -73,13 +97,14 @@ export function filterItems(
     return { selected: [...discovered], missing: [] };
   }
 
-  const discoveredSet = new Set(discovered);
-  const selected: string[] = [];
+  const discoveredMap = new Map(discovered.map((item) => [item.name, item]));
+  const selected: DiscoveredItem[] = [];
   const missing: string[] = [];
 
   for (const name of selection) {
-    if (discoveredSet.has(name)) {
-      selected.push(name);
+    const item = discoveredMap.get(name);
+    if (item) {
+      selected.push(item);
     } else {
       missing.push(name);
     }
@@ -94,7 +119,7 @@ export function filterItems(
 export function warnDiscoveryIssues(
   repoName: string,
   type: "skills" | "agents",
-  discovered: readonly string[],
+  discovered: readonly DiscoveredItem[],
   selection: "*" | string[] | false,
   missing: readonly string[]
 ): void {

@@ -196,7 +196,7 @@ my-skills-repo/
 | Roo | `.roo/skills`, `.roo/agents` | Unique |
 | Cline | `.cline/skills`, `.cline/agents` | Unique |
 | Windsurf | `.windsurf/skills`, `.windsurf/agents` | Unique |
-| OpenCode | `.agents/skills`, `.agents/agents` | Universal |
+| OpenCode | `.opencode/skills`, `.opencode/agents` | Unique |
 | Codex | `.agents/skills`, `.agents/agents` | Universal |
 | Amp | `.agents/skills`, `.agents/agents` | Universal |
 | Gemini CLI | `.agents/skills`, `.agents/agents` | Universal |

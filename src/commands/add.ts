@@ -13,7 +13,7 @@ import {
 import { requireGlobalConfig } from "../config/global.ts";
 import { resolveRepoUrl, deriveCacheKey } from "../cache/url.ts";
 import { ensureRepo } from "../cache/cache.ts";
-import { discoverSkills, discoverAgents } from "../discovery/discovery.ts";
+import { discoverSkills, discoverAgents, type DiscoveredItem } from "../discovery/discovery.ts";
 import { runInstall } from "./install.ts";
 
 export const addCommand = new Command("add")
@@ -143,45 +143,10 @@ function normalizeRepo(repo: string): string {
   return repo.replace(/\.git$/, "").toLowerCase();
 }
 
-const SELECT_ALL = "__select_all__";
-const SELECT_NONE = "__select_none__";
-
-/**
- * Run a multiselect prompt with "Select all" and "Select none" meta-options at the top.
- * Returns "*" for all, false for none, or the selected item names.
- */
-async function multiSelectWithToggle(
-  message: string,
-  items: string[]
-): Promise<"*" | string[] | false | undefined> {
-  const selected = await p.multiselect({
-    message,
-    options: [
-      { value: SELECT_ALL, label: "Select all", hint: "install everything" },
-      { value: SELECT_NONE, label: "Select none", hint: "skip all" },
-      ...items.map((name) => ({ value: name, label: name })),
-    ],
-    initialValues: [SELECT_ALL, ...items],
-    required: false,
-  });
-
-  if (p.isCancel(selected)) return undefined;
-
-  const values = selected as string[];
-
-  if (values.includes(SELECT_NONE)) return false;
-  if (values.includes(SELECT_ALL)) return "*";
-
-  const filtered = values.filter((v) => v !== SELECT_ALL && v !== SELECT_NONE);
-  if (filtered.length === 0) return false;
-  if (filtered.length === items.length) return "*";
-  return filtered;
-}
-
 /** Interactive picker for skills and agents */
 async function interactivePick(
-  skills: string[],
-  agents: string[]
+  skills: DiscoveredItem[],
+  agents: DiscoveredItem[]
 ): Promise<{ skills: "*" | string[] | false; agents: "*" | string[] | false } | undefined> {
   const result: {
     skills: "*" | string[] | false;
@@ -189,17 +154,47 @@ async function interactivePick(
   } = { skills: "*", agents: "*" };
 
   if (skills.length > 0) {
-    const selected = await multiSelectWithToggle("Select skills to install:", skills);
-    if (selected === undefined) return undefined;
-    result.skills = selected;
+    const names = skills.map((s) => s.name);
+    const selected = await p.multiselect({
+      message: "Select skills to install (press 'a' to toggle all):",
+      options: names.map((s) => ({ value: s, label: s })),
+      initialValues: names,
+      required: false,
+    });
+
+    if (p.isCancel(selected)) return undefined;
+
+    const values = selected as string[];
+    if (values.length === names.length) {
+      result.skills = "*";
+    } else if (values.length === 0) {
+      result.skills = false;
+    } else {
+      result.skills = values;
+    }
   } else {
     result.skills = false;
   }
 
   if (agents.length > 0) {
-    const selected = await multiSelectWithToggle("Select agents to install:", agents);
-    if (selected === undefined) return undefined;
-    result.agents = selected;
+    const names = agents.map((a) => a.name);
+    const selected = await p.multiselect({
+      message: "Select agents to install (press 'a' to toggle all):",
+      options: names.map((a) => ({ value: a, label: a })),
+      initialValues: names,
+      required: false,
+    });
+
+    if (p.isCancel(selected)) return undefined;
+
+    const values = selected as string[];
+    if (values.length === names.length) {
+      result.agents = "*";
+    } else if (values.length === 0) {
+      result.agents = false;
+    } else {
+      result.agents = values;
+    }
   } else {
     result.agents = false;
   }

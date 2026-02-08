@@ -4,7 +4,7 @@
  * Managed directories (e.g., `.pi/skills/_agentdeps_managed/`) are fully owned by the tool.
  * Stale entries are pruned, desired entries are installed.
  */
-import { readdir, mkdir, rm, lstat } from "node:fs/promises";
+import { readdir, mkdir, rm, lstat, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { ensureSymlink } from "./link.ts";
@@ -23,6 +23,24 @@ export interface SyncSummary {
   added: string[];
   removed: string[];
   unchanged: string[];
+}
+
+/**
+ * Resolve the target filename for an item.
+ * For file-based sources (e.g., agents stored as `.md` files),
+ * the file extension is preserved. For directories, the name is used as-is.
+ */
+async function resolveTargetName(name: string, sourcePath: string): Promise<string> {
+  try {
+    const srcStat = await stat(sourcePath);
+    if (srcStat.isFile()) {
+      const ext = sourcePath.match(/(\.[^.]+)$/)?.[1] ?? "";
+      return name + ext;
+    }
+  } catch {
+    // Can't stat — use name as-is
+  }
+  return name;
 }
 
 /**
@@ -58,11 +76,18 @@ export async function syncManagedDir(
     return summary;
   }
 
-  const desiredNames = new Set(desiredItems.keys());
+  // Resolve actual target names (handles file-based items with extensions)
+  const resolvedItems: Array<{ name: string; targetName: string; sourcePath: string }> = [];
+  for (const [name, sourcePath] of desiredItems) {
+    const targetName = await resolveTargetName(name, sourcePath);
+    resolvedItems.push({ name, targetName, sourcePath });
+  }
+
+  const targetNames = new Set(resolvedItems.map((item) => item.targetName));
 
   // Remove stale entries (not in desired set)
   for (const entry of currentEntries) {
-    if (!desiredNames.has(entry)) {
+    if (!targetNames.has(entry)) {
       await rm(join(managedDir, entry), { recursive: true, force: true });
       summary.removed.push(entry);
     }
@@ -85,8 +110,8 @@ export async function syncManagedDir(
   await mkdir(managedDir, { recursive: true });
 
   // Install desired items
-  for (const [name, sourcePath] of desiredItems) {
-    const targetPath = join(managedDir, name);
+  for (const { name, targetName, sourcePath } of resolvedItems) {
+    const targetPath = join(managedDir, targetName);
 
     if (installMethod === "link") {
       const result = await ensureSymlink(sourcePath, targetPath);

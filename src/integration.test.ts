@@ -82,34 +82,28 @@ describe("full install flow", () => {
 
     // 2. Discover skills and agents
     const skills = await discoverSkills(repoDir);
-    expect(skills).toEqual(["another-skill", "my-skill"]);
+    expect(skills.map((s) => s.name)).toEqual(["another-skill", "my-skill"]);
 
     const agents = await discoverAgents(repoDir);
-    expect(agents).toEqual(["test-agent"]);
+    expect(agents.map((a) => a.name)).toEqual(["test-agent"]);
 
     // 3. Filter (all)
     const skillResult = filterItems(skills, "*");
-    expect(skillResult.selected).toEqual(["another-skill", "my-skill"]);
+    expect(skillResult.selected.map((s) => s.name)).toEqual(["another-skill", "my-skill"]);
 
     const agentResult = filterItems(agents, "*");
-    expect(agentResult.selected).toEqual(["test-agent"]);
+    expect(agentResult.selected.map((a) => a.name)).toEqual(["test-agent"]);
 
     // 4. Install to managed dir
     const managedSkillsDir = join(tempDir, "project", ".pi", "skills", "_agentdeps_managed");
     const managedAgentsDir = join(tempDir, "project", ".pi", "agents", "_agentdeps_managed");
 
     const desiredSkills = new Map(
-      skillResult.selected.map((name) => [
-        name,
-        join(repoDir, "skills", name),
-      ])
+      skillResult.selected.map((item) => [item.name, item.sourcePath] as const)
     );
 
     const desiredAgents = new Map(
-      agentResult.selected.map((name) => [
-        name,
-        join(repoDir, "agents", name),
-      ])
+      agentResult.selected.map((item) => [item.name, item.sourcePath] as const)
     );
 
     const skillSummary = await syncManagedDir(managedSkillsDir, desiredSkills, "link");

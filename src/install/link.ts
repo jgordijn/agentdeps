@@ -9,16 +9,26 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 /**
- * Create a symlink. On Windows, falls back to directory junction.
+ * Create a symlink. Detects file vs directory targets.
+ * On Windows, falls back to directory junction for directories.
  */
 export async function createSymlink(
   target: string,
   linkPath: string
 ): Promise<void> {
+  // Detect if target is a file (e.g., agents stored as .md files)
+  let isFile = false;
   try {
-    await symlink(target, linkPath, "dir");
+    const s = await lstat(target);
+    isFile = s.isFile();
+  } catch {
+    // If we can't stat, default to dir
+  }
+
+  try {
+    await symlink(target, linkPath, isFile ? "file" : "dir");
   } catch (err) {
-    if (platform() === "win32") {
+    if (platform() === "win32" && !isFile) {
       // Fallback: try directory junction on Windows
       try {
         await execFileAsync("cmd", ["/c", "mklink", "/J", linkPath, target]);

@@ -40,12 +40,12 @@ describe("getAgent", () => {
     expect(agent!.projectSkills).toBe(".cursor/skills");
   });
 
-  it("returns opencode as universal", () => {
+  it("returns opencode with its own paths", () => {
     const agent = getAgent("opencode");
     expect(agent).toBeDefined();
-    expect(agent!.isUniversal).toBe(true);
-    expect(agent!.projectSkills).toBe(".agents/skills");
-    expect(agent!.projectAgents).toBe(".agents/agents");
+    expect(agent!.isUniversal).toBe(false);
+    expect(agent!.projectSkills).toBe(".opencode/skills");
+    expect(agent!.projectAgents).toBe(".opencode/agents");
   });
 
   it("returns undefined for unknown agent", () => {
