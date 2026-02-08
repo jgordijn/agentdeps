@@ -13,10 +13,11 @@ import { addCommand } from "./add.ts";
 import { removeCommand } from "./remove.ts";
 import { listCommand } from "./list.ts";
 import { configCommand } from "./config.ts";
+import { version } from "../version.ts";
 
 export const program = new Command()
   .name("agentdeps")
-  .version("0.1.0")
+  .version(version)
   .description(
     "Declarative dependency manager for AI coding agent skills and subagents"
   );

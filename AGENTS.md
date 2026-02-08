@@ -125,6 +125,14 @@ There is also an integration test at `src/integration.test.ts`.
 
 Always keep `README.md` up to date with the codebase. When making changes — adding features, modifying CLI flags, changing behavior, or updating configuration — update the README to reflect those changes. Documentation should never lag behind the code.
 
+## Versioning
+
+The package version is defined in two places that **must stay in sync**:
+- `package.json` → `version` (used by npm)
+- `src/version.ts` → `export const version` (used by the CLI at runtime)
+
+When bumping the version, update both files.
+
 ## Pre-Commit Checks
 
 Always run these checks before committing and fix any issues:
