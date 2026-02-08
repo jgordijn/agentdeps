@@ -16,13 +16,16 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { ensureRepo } from "./cache/cache.ts";
+import { ensureRepo, getCacheDir } from "./cache/cache.ts";
 import { discoverSkills, discoverAgents, filterItems } from "./discovery/discovery.ts";
 import { syncManagedDir } from "./install/managed.ts";
 import { resetLogState, hasLoggedErrors, getLogPath } from "./log/logger.ts";
 
 let tempDir: string;
 let repoDir: string;
+
+/** Cache keys used by tests — cleaned up in afterEach */
+const testCacheKeys = ["test-integration", "test-update-fail", "test-bad-ref"];
 
 async function runGit(args: string[], cwd: string): Promise<void> {
   const proc = Bun.spawn(["git", ...args], {
@@ -69,6 +72,11 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true });
+  // Clean up cached repos to prevent cross-test contamination
+  const cacheDir = getCacheDir();
+  for (const key of testCacheKeys) {
+    await rm(join(cacheDir, key), { recursive: true, force: true });
+  }
 });
 
 describe("full install flow", () => {
@@ -132,7 +140,7 @@ describe("full install flow", () => {
     expect(afterPrune).toEqual(["my-skill"]);
   });
 
-  it("logs errors when cache update fails but returns cached version", async () => {
+  it("fails when cache update fails (e.g. broken remote)", async () => {
     resetLogState();
 
     // 1. Clone successfully with the real repo
@@ -146,16 +154,25 @@ describe("full install flow", () => {
     await runGit(["remote", "set-url", "origin", "/nonexistent/path"], cachedRepoPath);
 
     // 3. Call ensureRepo again with the same cacheKey.
-    //    The cache dir exists → updateRepo → fetch fails → logError → returns cached.
+    //    The cache dir exists → updateRepo → fetch fails → logError → returns failure.
     const result2 = await ensureRepo(repoDir, "main", "test-update-fail");
 
-    // Should still succeed (uses cached version)
-    expect(result2.success).toBe(true);
+    // Should fail — invalid refs and broken remotes must not silently succeed
+    expect(result2.success).toBe(false);
+    expect(result2.error).toBeDefined();
 
     // The failed update should have been logged
     expect(hasLoggedErrors()).toBe(true);
 
     const logContent = await readFile(getLogPath(), "utf-8");
     expect(logContent).toContain("cache.update");
+  });
+
+  it("fails when a non-existent ref is specified", async () => {
+    // Attempt to clone with a ref that doesn't exist
+    const result = await ensureRepo(repoDir, "nonexistent-branch", "test-bad-ref");
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
   });
 });

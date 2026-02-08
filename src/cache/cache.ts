@@ -6,7 +6,7 @@
  */
 import { join } from "node:path";
 import { homedir, platform } from "node:os";
-import { mkdir, stat as fsStat } from "node:fs/promises";
+import { mkdir, rm, stat as fsStat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { logError } from "../log/logger.ts";
 
@@ -106,12 +106,18 @@ export async function cloneRepo(
   ]);
 
   if (!result.success) {
+    // Clean up any partial directory left by the failed clone
+    await rm(repoPath, { recursive: true, force: true });
+
     // Fallback: try clone without --branch (for commit SHAs)
     const fallback = await runGit(["clone", url, repoPath]);
     if (fallback.success) {
       const checkout = await runGit(["checkout", ref], repoPath);
       if (!checkout.success) {
-        return { success: false, path: repoPath, error: checkout.stderr };
+        // Checkout failed — ref doesn't exist. Clean up the cloned directory
+        // to prevent stale content from being used on subsequent runs.
+        await rm(repoPath, { recursive: true, force: true });
+        return { success: false, path: repoPath, error: `ref '${ref}' not found: ${checkout.stderr}` };
       }
       return { success: true, path: repoPath };
     }
@@ -172,8 +178,7 @@ export async function ensureRepo(
     const result = await updateRepo(repoPath, ref);
     if (!result.success) {
       logError("cache.update", new Error(`Failed to update ${cacheKey}: ${result.error}`));
-      console.warn(`⚠ Failed to update ${cacheKey} (using cached version)`);
-      // Continue with existing cached state
+      return { success: false, path: repoPath, error: `Failed to update ${cacheKey}: ${result.error}` };
     }
     return { success: true, path: repoPath };
   }
