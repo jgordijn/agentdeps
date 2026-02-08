@@ -125,6 +125,18 @@ There is also an integration test at `src/integration.test.ts`.
 
 Always keep `README.md` up to date with the codebase. When making changes — adding features, modifying CLI flags, changing behavior, or updating configuration — update the README to reflect those changes. Documentation should never lag behind the code.
 
+## Pre-Commit Checks
+
+Always run these checks before committing and fix any issues:
+
+```bash
+bunx tsc --noEmit   # Type-check — must pass with zero errors
+bun test            # All tests must pass
+bun run build       # Build must succeed
+```
+
+Do **not** commit or push if any of these fail.
+
 ## OpenSpec Workflow
 
 This project uses [OpenSpec](https://github.com/openspec-dev/openspec) for structured change management. OpenSpec specs live in `openspec/specs/` and track the authoritative design of each module.
