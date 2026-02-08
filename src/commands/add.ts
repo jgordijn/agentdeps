@@ -10,7 +10,7 @@ import {
   projectConfigExists,
   type Dependency,
 } from "../config/project.ts";
-import { requireGlobalConfig } from "../config/global.ts";
+import { requireGlobalConfig, globalAgentsYamlPath } from "../config/global.ts";
 import { resolveRepoUrl, deriveCacheKey } from "../cache/url.ts";
 import { ensureRepo } from "../cache/cache.ts";
 import { discoverSkills, discoverAgents, type DiscoveredItem } from "../discovery/discovery.ts";
@@ -27,23 +27,23 @@ export const addCommand = new Command("add")
   .option("--all-agents", "Install all agents")
   .option("--no-skills", "Don't install any skills")
   .option("--no-agents", "Don't install any agents")
+  .option("-g, --global", "Add dependency to global agents.yaml instead of project")
   .action(async (repo: string, options) => {
     const config = await requireGlobalConfig();
 
-    const projectYamlPath = join(process.cwd(), "agents.yaml");
+    const isGlobal = !!options.global;
+    const targetYamlPath = isGlobal
+      ? globalAgentsYamlPath()
+      : join(process.cwd(), "agents.yaml");
+    const targetLabel = isGlobal ? "global" : "project";
 
-    // Check if repo already exists
-    if (await projectConfigExists(projectYamlPath)) {
-      const existing = await loadProjectConfig(projectYamlPath);
-      const match = existing.dependencies.find(
+    // Check if repo already exists (used later for pre-selection and update)
+    let existingDep: Dependency | undefined;
+    if (await projectConfigExists(targetYamlPath)) {
+      const existing = await loadProjectConfig(targetYamlPath);
+      existingDep = existing.dependencies.find(
         (d) => d.repo === repo || normalizeRepo(d.repo) === normalizeRepo(repo)
       );
-      if (match) {
-        console.error(
-          `✗ ${repo} already exists in agents.yaml. Edit the file directly to modify it.`
-        );
-        process.exit(1);
-      }
     }
 
     // Clone repo to cache and discover
@@ -102,8 +102,8 @@ export const addCommand = new Command("add")
         agents = "*";
       }
     } else {
-      // Interactive picker
-      const pickResult = await interactivePick(discoveredSkills, discoveredAgents);
+      // Interactive picker (pre-select existing choices when updating)
+      const pickResult = await interactivePick(discoveredSkills, discoveredAgents, existingDep);
       if (!pickResult) {
         return; // Cancelled
       }
@@ -119,15 +119,24 @@ export const addCommand = new Command("add")
       agents,
     };
 
-    // Load or create project config
-    let projectConfig = await projectConfigExists(projectYamlPath)
-      ? await loadProjectConfig(projectYamlPath)
+    // Load or create config
+    let targetConfig = await projectConfigExists(targetYamlPath)
+      ? await loadProjectConfig(targetYamlPath)
       : { dependencies: [] };
 
-    projectConfig.dependencies.push(dep);
-    await saveProjectConfig(projectYamlPath, projectConfig);
+    if (existingDep) {
+      // Update existing dependency in-place
+      const idx = targetConfig.dependencies.findIndex(
+        (d) => d.repo === repo || normalizeRepo(d.repo) === normalizeRepo(repo)
+      );
+      targetConfig.dependencies[idx] = dep;
+    } else {
+      targetConfig.dependencies.push(dep);
+    }
+    await saveProjectConfig(targetYamlPath, targetConfig);
 
-    console.log(`\n✓ Added ${repo} to agents.yaml`);
+    const verb = existingDep ? "Updated" : "Added";
+    console.log(`\n✓ ${verb} ${repo} in ${targetLabel} agents.yaml`);
 
     // Run install
     await runInstall(config);
@@ -143,10 +152,21 @@ function normalizeRepo(repo: string): string {
   return repo.replace(/\.git$/, "").toLowerCase();
 }
 
+/** Compute initial selection from an existing dependency config */
+function initialSelection(
+  names: string[],
+  existing: "*" | string[] | false | undefined
+): string[] {
+  if (existing === undefined || existing === "*") return names;
+  if (existing === false) return [];
+  return existing.filter((n) => names.includes(n));
+}
+
 /** Interactive picker for skills and agents */
 async function interactivePick(
   skills: DiscoveredItem[],
-  agents: DiscoveredItem[]
+  agents: DiscoveredItem[],
+  existingDep?: Dependency
 ): Promise<{ skills: "*" | string[] | false; agents: "*" | string[] | false } | undefined> {
   const result: {
     skills: "*" | string[] | false;
@@ -158,7 +178,7 @@ async function interactivePick(
     const selected = await p.multiselect({
       message: "Select skills to install (press 'a' to toggle all):",
       options: names.map((s) => ({ value: s, label: s })),
-      initialValues: names,
+      initialValues: initialSelection(names, existingDep?.skills),
       required: false,
     });
 
@@ -181,7 +201,7 @@ async function interactivePick(
     const selected = await p.multiselect({
       message: "Select agents to install (press 'a' to toggle all):",
       options: names.map((a) => ({ value: a, label: a })),
-      initialValues: names,
+      initialValues: initialSelection(names, existingDep?.agents),
       required: false,
     });
 

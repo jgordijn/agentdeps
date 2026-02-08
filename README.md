@@ -40,6 +40,10 @@ agentdeps add my-org/my-repo --skill frontend-design --skill kotlin-conventions 
 
 # Specify a git ref
 agentdeps add my-org/my-repo --ref v2.0
+
+# Add to global agents.yaml (available in every project)
+agentdeps add my-org/my-repo --global
+# or: agentdeps add my-org/my-repo -g
 ```
 
 ### 3. Install dependencies
@@ -124,7 +128,13 @@ custom_agents:
 
 ### Global Skills & Agents
 
-Personal dependencies that should be available in **every project** go in a global `agents.yaml` alongside your config:
+Personal dependencies that should be available in **every project** go in a global `agents.yaml` alongside your config. Use `--global` (or `-g`) to add them:
+
+```bash
+agentdeps add my-org/my-skills-repo --global
+```
+
+The global file lives at:
 
 ```
 ~/.config/agentdeps/agents.yaml      # Linux / macOS

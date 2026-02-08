@@ -121,6 +121,10 @@ Tests use Bun's built-in test runner (`describe`, `test`, `expect`). Filesystem-
 
 There is also an integration test at `src/integration.test.ts`.
 
+## Documentation
+
+Always keep `README.md` up to date with the codebase. When making changes — adding features, modifying CLI flags, changing behavior, or updating configuration — update the README to reflect those changes. Documentation should never lag behind the code.
+
 ## OpenSpec Workflow
 
 This project uses [OpenSpec](https://github.com/openspec-dev/openspec) for structured change management. OpenSpec specs live in `openspec/specs/` and track the authoritative design of each module.
