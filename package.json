@@ -11,7 +11,8 @@
     "dev": "bun run --watch src/index.ts",
     "build": "bun build ./src/index.ts --outdir ./dist --target node --minify",
     "test": "bun test",
-    "start": "bun run src/index.ts"
+    "start": "bun run src/index.ts",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "keywords": [
     "ai",

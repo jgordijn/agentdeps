@@ -1,0 +1,27 @@
+#!/bin/sh
+# Pre-commit hook — runs typecheck, tests, and build before allowing a commit.
+
+echo "🔍 Running pre-commit checks..."
+
+echo "  → Type-checking..."
+bunx tsc --noEmit
+if [ $? -ne 0 ]; then
+  echo "✗ Typecheck failed. Fix errors before committing."
+  exit 1
+fi
+
+echo "  → Running tests..."
+bun test
+if [ $? -ne 0 ]; then
+  echo "✗ Tests failed. Fix failures before committing."
+  exit 1
+fi
+
+echo "  → Building..."
+bun run build
+if [ $? -ne 0 ]; then
+  echo "✗ Build failed. Fix errors before committing."
+  exit 1
+fi
+
+echo "✓ All pre-commit checks passed."
