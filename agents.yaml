@@ -3,9 +3,3 @@ dependencies:
     skills:
       - bun-development
     agents: false
-  - repo: RoyalAholdDelhaize/ai-agent-instructions
-    ref: plugin
-    skills:
-      - agent-builder
-    agents:
-      - architect-reviewer
