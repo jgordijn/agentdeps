@@ -19,6 +19,8 @@ import { tmpdir } from "node:os";
 import { ensureRepo, getCacheDir } from "./cache/cache.ts";
 import { discoverSkills, discoverAgents, filterItems } from "./discovery/discovery.ts";
 import { syncManagedDir } from "./install/managed.ts";
+import { cleanupLegacyManagedDirs } from "./install/migration.ts";
+import { resetRegistry } from "./registry/registry.ts";
 import { resetLogState, hasLoggedErrors, getLogPath } from "./log/logger.ts";
 
 let tempDir: string;
@@ -37,6 +39,7 @@ async function runGit(args: string[], cwd: string): Promise<void> {
 }
 
 beforeEach(async () => {
+  resetRegistry();
   tempDir = await mkdtemp(join(tmpdir(), "agentdeps-integration-"));
   repoDir = join(tempDir, "test-repo");
 
@@ -102,9 +105,9 @@ describe("full install flow", () => {
     const agentResult = filterItems(agents, "*");
     expect(agentResult.selected.map((a) => a.name)).toEqual(["test-agent"]);
 
-    // 4. Install to managed dir
-    const managedSkillsDir = join(tempDir, "project", ".pi", "skills", "_agentdeps_managed");
-    const managedAgentsDir = join(tempDir, "project", ".pi", "agents", "_agentdeps_managed");
+    // 4. Install to managed dir (pi now uses .agents/ paths)
+    const managedSkillsDir = join(tempDir, "project", ".agents", "skills", "_agentdeps_managed");
+    const managedAgentsDir = join(tempDir, "project", ".agents", "agents", "_agentdeps_managed");
 
     const desiredSkills = new Map(
       skillResult.selected.map((item) => [item.name, item.sourcePath] as const)
@@ -174,5 +177,51 @@ describe("full install flow", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
+  });
+});
+
+
+describe("legacy path migration", () => {
+  it("cleans up legacy managed dirs and installs to .agents/", async () => {
+    const projectDir = join(tempDir, "project");
+
+    // Simulate existing legacy managed dirs at old Pi paths
+    const legacySkillsManaged = join(projectDir, ".pi/skills/_agentdeps_managed/my-skill");
+    const legacyAgentsManaged = join(projectDir, ".pi/agents/_agentdeps_managed/test-agent");
+    await mkdir(legacySkillsManaged, { recursive: true });
+    await mkdir(legacyAgentsManaged, { recursive: true });
+    await writeFile(join(legacySkillsManaged, "SKILL.md"), "old");
+
+    // Run migration from the project directory
+    const originalCwd = process.cwd();
+    process.chdir(projectDir);
+    try {
+      await cleanupLegacyManagedDirs(["pi"]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+
+    // Legacy managed dirs should be gone
+    const piSkillsEntries = await readdir(join(projectDir, ".pi/skills"));
+    expect(piSkillsEntries).not.toContain("_agentdeps_managed");
+
+    const piAgentsEntries = await readdir(join(projectDir, ".pi/agents"));
+    expect(piAgentsEntries).not.toContain("_agentdeps_managed");
+
+    // Now install skills to the new .agents/ path
+    const skills = await discoverSkills(repoDir);
+    const skillResult = filterItems(skills, "*");
+
+    const newManagedDir = join(projectDir, ".agents/skills/_agentdeps_managed");
+    const desiredSkills = new Map(
+      skillResult.selected.map((item) => [item.name, item.sourcePath] as const)
+    );
+
+    const summary = await syncManagedDir(newManagedDir, desiredSkills, "link");
+    expect(summary.added).toEqual(["another-skill", "my-skill"]);
+
+    // Verify new location has the skills
+    const newEntries = await readdir(newManagedDir);
+    expect(newEntries.sort()).toEqual(["another-skill", "my-skill"]);
   });
 });

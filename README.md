@@ -156,7 +156,7 @@ dependencies:
 When you run `agentdeps install`, both global and project dependencies are processed:
 
 1. **Global deps** → installed to each agent's **global** directories (e.g., `~/.pi/agent/skills/`, `~/.claude/skills/`)
-2. **Project deps** → installed to each agent's **project** directories (e.g., `.pi/skills/`, `.claude/skills/`)
+2. **Project deps** → installed to each agent's **project** directories (e.g., `.agents/skills/`, `.claude/skills/`)
 
 Global skills are available everywhere — no need to add the same dependency to every project.
 
@@ -200,13 +200,13 @@ my-skills-repo/
 
 | Agent | Project Paths | Type |
 |---|---|---|
-| Pi | `.pi/skills`, `.pi/agents` | Unique |
+| Pi | `.agents/skills`, `.agents/agents` | Universal |
 | Claude Code | `.claude/skills`, `.claude/agents` | Unique |
 | Cursor | `.cursor/skills`, `.cursor/agents` | Unique |
 | Roo | `.roo/skills`, `.roo/agents` | Unique |
 | Cline | `.cline/skills`, `.cline/agents` | Unique |
 | Windsurf | `.windsurf/skills`, `.windsurf/agents` | Unique |
-| OpenCode | `.opencode/skills`, `.opencode/agents` | Unique |
+| OpenCode | `.agents/skills`, `.agents/agents` | Universal |
 | Codex | `.agents/skills`, `.agents/agents` | Universal |
 | Amp | `.agents/skills`, `.agents/agents` | Universal |
 | Gemini CLI | `.agents/skills`, `.agents/agents` | Universal |
@@ -220,7 +220,7 @@ Universal agents share the same project paths — items are only installed once.
 - **Link (default)**: Symlinks from `_agentdeps_managed/` to the cached repo. Fast, no duplication.
 - **Copy**: Smart sync — adds new files, updates changed files, removes deleted files. Self-contained and portable.
 
-Both use `_agentdeps_managed/` subdirectories (e.g., `.pi/skills/_agentdeps_managed/`) which are fully owned by the tool.
+Both use `_agentdeps_managed/` subdirectories (e.g., `.agents/skills/_agentdeps_managed/`) which are fully owned by the tool.
 
 ## Requirements
 

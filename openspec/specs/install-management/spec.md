@@ -5,11 +5,11 @@ The tool SHALL install items from the cached repository into each configured age
 
 #### Scenario: Skill installation for pi
 - **WHEN** pi is a configured agent and skill `frontend-design` is resolved from `vercel-labs/agent-skills`
-- **THEN** `frontend-design` is installed at `.pi/skills/_agentdeps_managed/frontend-design` (via symlink or copy depending on install method)
+- **THEN** `frontend-design` is installed at `.agents/skills/_agentdeps_managed/frontend-design` (via symlink or copy depending on install method)
 
 #### Scenario: Subagent installation for pi
 - **WHEN** pi is a configured agent and subagent `code-reviewer` is resolved from a dependency
-- **THEN** `code-reviewer` is installed at `.pi/agents/_agentdeps_managed/code-reviewer`
+- **THEN** `code-reviewer` is installed at `.agents/agents/_agentdeps_managed/code-reviewer`
 
 #### Scenario: Skill installation for opencode
 - **WHEN** opencode is a configured agent and skill `frontend-design` is resolved
@@ -35,7 +35,7 @@ When `install_method` is `link` (the default), the tool SHALL create symlinks po
 
 #### Scenario: Symlink creation
 - **WHEN** install method is `link` and skill `frontend-design` is installed for pi
-- **THEN** a symlink is created at `.pi/skills/_agentdeps_managed/frontend-design` pointing to `<cache-dir>/agentdeps/repos/vercel-labs-agent-skills-main/skills/frontend-design`
+- **THEN** a symlink is created at `.agents/skills/_agentdeps_managed/frontend-design` pointing to `<cache-dir>/agentdeps/repos/vercel-labs-agent-skills-main/skills/frontend-design`
 
 #### Scenario: Windows symlink fallback to junction
 - **WHEN** `os.symlink` fails on Windows (e.g., Developer Mode not enabled)

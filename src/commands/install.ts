@@ -32,6 +32,7 @@ import {
   type LabeledAgentPaths,
 } from "../registry/registry.ts";
 import { syncManagedDir, expandHomePath } from "../install/managed.ts";
+import { cleanupLegacyManagedDirs } from "../install/migration.ts";
 import { logError, printLogHint } from "../log/logger.ts";
 
 /** Resolved items from a single dependency */
@@ -225,6 +226,10 @@ export async function runInstall(config: GlobalConfig): Promise<void> {
 
   // Resolve agent paths (with deduplication and labels)
   const labeledPaths = resolveAgentPathsLabeled(config.agents);
+
+  // Clean up legacy managed directories for migrated agents
+  await cleanupLegacyManagedDirs(config.agents);
+
 
   // 1. Process global agents.yaml
   const globalYamlPath = globalAgentsYamlPath();

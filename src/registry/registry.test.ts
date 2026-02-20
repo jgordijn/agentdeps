@@ -11,6 +11,7 @@ import {
   mergeCustomAgents,
   resolveAgentPaths,
   resetRegistry,
+  getLegacyProjectPaths,
 } from "./registry.ts";
 
 beforeEach(() => {
@@ -18,13 +19,14 @@ beforeEach(() => {
 });
 
 describe("getAgent", () => {
-  it("returns pi agent", () => {
+  it("returns pi agent with universal project paths", () => {
     const agent = getAgent("pi");
     expect(agent).toBeDefined();
-    expect(agent!.projectSkills).toBe(".pi/skills");
-    expect(agent!.projectAgents).toBe(".pi/agents");
+    expect(agent!.projectSkills).toBe(".agents/skills");
+    expect(agent!.projectAgents).toBe(".agents/agents");
     expect(agent!.globalSkills).toBe("~/.pi/agent/skills");
     expect(agent!.globalAgents).toBe("~/.pi/agent/agents");
+    expect(agent!.isUniversal).toBe(true);
   });
 
   it("returns claude-code agent", () => {
@@ -40,12 +42,12 @@ describe("getAgent", () => {
     expect(agent!.projectSkills).toBe(".cursor/skills");
   });
 
-  it("returns opencode with its own paths", () => {
+  it("returns opencode with universal project paths", () => {
     const agent = getAgent("opencode");
     expect(agent).toBeDefined();
-    expect(agent!.isUniversal).toBe(false);
-    expect(agent!.projectSkills).toBe(".opencode/skills");
-    expect(agent!.projectAgents).toBe(".opencode/agents");
+    expect(agent!.isUniversal).toBe(true);
+    expect(agent!.projectSkills).toBe(".agents/skills");
+    expect(agent!.projectAgents).toBe(".agents/agents");
   });
 
   it("returns undefined for unknown agent", () => {
@@ -132,8 +134,40 @@ describe("resolveAgentPaths", () => {
 
   it("includes all unique paths for different agents", () => {
     const paths = resolveAgentPaths(["pi", "claude-code"]);
+    // Pi is now universal (.agents/skills), claude-code has its own (.claude/skills)
+    // Both have different global paths so we get 2 entries
     expect(paths.length).toBe(2);
-    expect(paths[0]!.projectSkills).toBe(".pi/skills");
+    expect(paths[0]!.projectSkills).toBe(".agents/skills");
     expect(paths[1]!.projectSkills).toBe(".claude/skills");
+  });
+});
+
+
+describe("getLegacyProjectPaths", () => {
+  it("returns legacy paths for pi", () => {
+    const paths = getLegacyProjectPaths(["pi"]);
+    expect(paths).toEqual([{ skills: ".pi/skills", agents: ".pi/agents" }]);
+  });
+
+  it("returns legacy paths for opencode", () => {
+    const paths = getLegacyProjectPaths(["opencode"]);
+    expect(paths).toEqual([{ skills: ".opencode/skills", agents: ".opencode/agents" }]);
+  });
+
+  it("returns legacy paths for both pi and opencode", () => {
+    const paths = getLegacyProjectPaths(["pi", "opencode"]);
+    expect(paths).toHaveLength(2);
+    expect(paths[0]).toEqual({ skills: ".pi/skills", agents: ".pi/agents" });
+    expect(paths[1]).toEqual({ skills: ".opencode/skills", agents: ".opencode/agents" });
+  });
+
+  it("returns empty for agents without legacy paths", () => {
+    const paths = getLegacyProjectPaths(["claude-code", "codex"]);
+    expect(paths).toEqual([]);
+  });
+
+  it("returns empty for unknown agents", () => {
+    const paths = getLegacyProjectPaths(["unknown"]);
+    expect(paths).toEqual([]);
   });
 });

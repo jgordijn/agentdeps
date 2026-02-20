@@ -14,6 +14,7 @@ export interface Agent {
   readonly globalSkills: string;
   readonly globalAgents: string;
   readonly isUniversal: boolean;
+  readonly legacyProjectPaths?: { readonly skills: string; readonly agents: string };
 }
 
 /** Custom agent definition from user config */
@@ -35,11 +36,12 @@ const BUILT_IN_AGENTS: readonly Agent[] = [
   {
     name: "pi",
     displayName: "Pi",
-    projectSkills: ".pi/skills",
-    projectAgents: ".pi/agents",
+    projectSkills: UNIVERSAL_PROJECT_SKILLS,
+    projectAgents: UNIVERSAL_PROJECT_AGENTS,
     globalSkills: "~/.pi/agent/skills",
     globalAgents: "~/.pi/agent/agents",
-    isUniversal: false,
+    isUniversal: true,
+    legacyProjectPaths: { skills: ".pi/skills", agents: ".pi/agents" },
   },
   {
     name: "claude-code",
@@ -90,11 +92,12 @@ const BUILT_IN_AGENTS: readonly Agent[] = [
   {
     name: "opencode",
     displayName: "OpenCode",
-    projectSkills: ".opencode/skills",
-    projectAgents: ".opencode/agents",
+    projectSkills: UNIVERSAL_PROJECT_SKILLS,
+    projectAgents: UNIVERSAL_PROJECT_AGENTS,
     globalSkills: "~/.config/opencode/skills",
     globalAgents: "~/.config/opencode/agents",
-    isUniversal: false,
+    isUniversal: true,
+    legacyProjectPaths: { skills: ".opencode/skills", agents: ".opencode/agents" },
   },
   {
     name: "codex",
@@ -164,6 +167,34 @@ export function universalAgents(): readonly Agent[] {
 /** Get agents with their own unique path conventions */
 export function nonUniversalAgents(): readonly Agent[] {
   return registry.filter((a) => !a.isUniversal);
+}
+
+/** Legacy project path pair for migration */
+export interface LegacyProjectPaths {
+  readonly skills: string;
+  readonly agents: string;
+}
+
+/**
+ * Get legacy project paths for configured agents that have migrated.
+ * Returns deduplicated legacy paths for agents that have `legacyProjectPaths` set.
+ */
+export function getLegacyProjectPaths(agentNames: readonly string[]): LegacyProjectPaths[] {
+  const seen = new Set<string>();
+  const paths: LegacyProjectPaths[] = [];
+
+  for (const name of agentNames) {
+    const agent = getAgent(name);
+    if (!agent?.legacyProjectPaths) continue;
+
+    const key = `${agent.legacyProjectPaths.skills}|${agent.legacyProjectPaths.agents}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    paths.push(agent.legacyProjectPaths);
+  }
+
+  return paths;
 }
 
 /**

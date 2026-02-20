@@ -5,7 +5,7 @@ The tool SHALL maintain a built-in registry mapping agent identifiers to their p
 
 #### Scenario: Pi agent paths
 - **WHEN** agent `pi` is configured
-- **THEN** project paths are `.pi/skills` and `.pi/agents`, global paths are `~/.pi/agent/skills` and `~/.pi/agent/agents`
+- **THEN** project paths are `.agents/skills` and `.agents/agents`, global paths are `~/.pi/agent/skills` and `~/.pi/agent/agents`
 
 #### Scenario: OpenCode agent paths
 - **WHEN** agent `opencode` is configured
@@ -31,7 +31,7 @@ Agents that use the same `.agents/skills/` and `.agents/agents/` convention SHAL
 
 #### Scenario: Universal agents group
 - **WHEN** the interactive setup displays agent choices
-- **THEN** agents sharing `.agents/skills/` and `.agents/agents/` (amp, codex, gemini-cli, github-copilot, opencode, kimi-cli) are grouped under "Universal (.agents/)"
+- **THEN** agents sharing `.agents/skills/` and `.agents/agents/` (pi, opencode, amp, codex, gemini-cli, github-copilot, kimi-cli) are grouped under "Universal (.agents/)"
 
 #### Scenario: Deduplication of universal project paths
 - **WHEN** multiple universal agents are selected (e.g., opencode and codex)
