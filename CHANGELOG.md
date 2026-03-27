@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+## 0.5.1
 ### Features
 
 - **Verbose install update summaries** — `agentdeps install` now reports which managed skills and agents were added, updated, or removed when a dependency repository changes, making registry updates much easier to verify.
