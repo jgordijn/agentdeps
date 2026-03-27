@@ -30,64 +30,92 @@ afterEach(async () => {
 });
 
 describe("smartSync", () => {
-  it("copies new files", async () => {
+  it("returns true when it copies new files", async () => {
     await writeFile(join(srcDir, "file1.txt"), "hello");
     await writeFile(join(srcDir, "file2.txt"), "world");
 
-    await smartSync(srcDir, dstDir);
+    const changed = await smartSync(srcDir, dstDir);
 
     const content1 = await readFile(join(dstDir, "file1.txt"), "utf-8");
     const content2 = await readFile(join(dstDir, "file2.txt"), "utf-8");
+    expect(changed).toBe(true);
     expect(content1).toBe("hello");
     expect(content2).toBe("world");
   });
 
-  it("copies subdirectories recursively", async () => {
+  it("returns true when it copies subdirectories recursively", async () => {
     await mkdir(join(srcDir, "sub"), { recursive: true });
     await writeFile(join(srcDir, "sub", "nested.txt"), "nested");
 
-    await smartSync(srcDir, dstDir);
+    const changed = await smartSync(srcDir, dstDir);
 
     const content = await readFile(join(dstDir, "sub", "nested.txt"), "utf-8");
+    expect(changed).toBe(true);
     expect(content).toBe("nested");
   });
 
-  it("overwrites changed files", async () => {
+  it("returns false when the destination already matches the source", async () => {
+    await writeFile(join(srcDir, "file.txt"), "unchanged");
+    await smartSync(srcDir, dstDir);
+
+    const changed = await smartSync(srcDir, dstDir);
+
+    expect(changed).toBe(false);
+  });
+
+  it("returns true when it overwrites changed files", async () => {
     await writeFile(join(srcDir, "file.txt"), "original");
     await smartSync(srcDir, dstDir);
 
-    // Modify source
-    await writeFile(join(srcDir, "file.txt"), "updated content");
-    await smartSync(srcDir, dstDir);
+    await writeFile(join(srcDir, "file.txt"), "updated content that is longer");
+    const changed = await smartSync(srcDir, dstDir);
 
     const content = await readFile(join(dstDir, "file.txt"), "utf-8");
-    expect(content).toBe("updated content");
+    expect(changed).toBe(true);
+    expect(content).toBe("updated content that is longer");
   });
 
-  it("removes deleted files", async () => {
+  it("returns true when it removes deleted files", async () => {
     await writeFile(join(srcDir, "keep.txt"), "keep");
     await writeFile(join(srcDir, "remove.txt"), "remove");
     await smartSync(srcDir, dstDir);
 
-    // Remove from source
     await rm(join(srcDir, "remove.txt"));
-    await smartSync(srcDir, dstDir);
+    const changed = await smartSync(srcDir, dstDir);
 
     const entries = await readdir(dstDir);
+    expect(changed).toBe(true);
     expect(entries).toEqual(["keep.txt"]);
   });
 
-  it("removes deleted subdirectories", async () => {
+  it("returns true when it removes deleted subdirectories", async () => {
     await mkdir(join(srcDir, "sub"), { recursive: true });
     await writeFile(join(srcDir, "sub", "file.txt"), "content");
     await writeFile(join(srcDir, "root.txt"), "root");
     await smartSync(srcDir, dstDir);
 
-    // Remove subdirectory from source
     await rm(join(srcDir, "sub"), { recursive: true });
-    await smartSync(srcDir, dstDir);
+    const changed = await smartSync(srcDir, dstDir);
 
     const entries = await readdir(dstDir);
+    expect(changed).toBe(true);
     expect(entries).toEqual(["root.txt"]);
+  });
+
+  it("supports single-file sync and reports whether it changed", async () => {
+    const srcFile = join(tempDir, "agent.md");
+    const outDir = join(tempDir, "out");
+    const dstFile = join(outDir, "agent.md");
+    await mkdir(outDir, { recursive: true });
+    await writeFile(srcFile, "# Agent");
+
+    expect(await smartSync(srcFile, dstFile)).toBe(true);
+    expect(await readFile(dstFile, "utf-8")).toBe("# Agent");
+
+    expect(await smartSync(srcFile, dstFile)).toBe(false);
+
+    await writeFile(srcFile, "# Agent updated");
+    expect(await smartSync(srcFile, dstFile)).toBe(true);
+    expect(await readFile(dstFile, "utf-8")).toBe("# Agent updated");
   });
 });

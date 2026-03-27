@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- **Verbose install update summaries** — `agentdeps install` now reports which managed skills and agents were added, updated, or removed when a dependency repository changes, making registry updates much easier to verify.
+
+### Notes
+
+- No new flags were added; unchanged installs still stay concise and report targets as up to date.
+- Link installs detect updated managed items from cached repository changes, while copy installs report updates when synced content changes on disk.
+
+
 ## 0.5.0
 
 ### Features

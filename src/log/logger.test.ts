@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { tmpdir, platform } from "node:os";
 
 // We need to set XDG_STATE_HOME *before* importing the logger so getLogDir()
 // picks up the test directory. The logger caches logDirEnsured, so we reset.
@@ -27,12 +27,16 @@ afterEach(async () => {
 });
 
 describe("logger", () => {
-  it("getLogDir uses XDG_STATE_HOME when set", async () => {
-    // Re-import to get fresh module state
+  it("resolves the platform-appropriate log directory", async () => {
     const { getLogDir } = await import("./logger.ts");
     const dir = getLogDir();
-    expect(dir).toContain(tempDir);
-    expect(dir).toContain("agentdeps");
+
+    if (platform() === "darwin") {
+      expect(dir).toContain("Library/Logs/agentdeps");
+    } else {
+      expect(dir).toContain(tempDir);
+      expect(dir).toContain("agentdeps");
+    }
   });
 
   it("getLogPath returns a file inside the log dir", async () => {

@@ -54,6 +54,17 @@ agentdeps install
 
 This clones/updates all dependency repos, discovers skills and agents, and installs them into each configured coding agent's directories.
 
+When install changes managed items, the output now includes itemized change groups so you can see exactly what changed:
+
+```text
+✓ Project (Pi): 1 skill added, 1 skill updated, 1 skill removed
+      skills added: new-skill
+      skills updated: my-skill
+      skills removed: another-skill
+```
+
+If nothing changed, install stays concise and reports the target as `up to date`.
+
 ### 4. List dependencies
 
 ```bash
