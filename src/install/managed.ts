@@ -21,6 +21,7 @@ export function expandHomePath(path: string): string {
 /** Summary of actions taken during sync */
 export interface SyncSummary {
   added: string[];
+  updated: string[];
   removed: string[];
   unchanged: string[];
 }
@@ -57,11 +58,11 @@ export async function syncManagedDir(
 ): Promise<SyncSummary> {
   const summary: SyncSummary = {
     added: [],
+    updated: [],
     removed: [],
     unchanged: [],
   };
 
-  // Check if managed dir already exists
   let currentEntries: string[] = [];
   let dirExists = false;
   try {
@@ -71,12 +72,10 @@ export async function syncManagedDir(
     // Directory doesn't exist yet
   }
 
-  // Nothing desired and nothing exists — skip entirely, don't create empty dirs
   if (desiredItems.size === 0 && !dirExists) {
     return summary;
   }
 
-  // Resolve actual target names (handles file-based items with extensions)
   const resolvedItems: Array<{ name: string; targetName: string; sourcePath: string }> = [];
   for (const [name, sourcePath] of desiredItems) {
     const targetName = await resolveTargetName(name, sourcePath);
@@ -85,7 +84,6 @@ export async function syncManagedDir(
 
   const targetNames = new Set(resolvedItems.map((item) => item.targetName));
 
-  // Remove stale entries (not in desired set)
   for (const entry of currentEntries) {
     if (!targetNames.has(entry)) {
       await rm(join(managedDir, entry), { recursive: true, force: true });
@@ -93,7 +91,6 @@ export async function syncManagedDir(
     }
   }
 
-  // If nothing desired remains, clean up the empty managed dir
   if (desiredItems.size === 0) {
     try {
       const remaining = await readdir(managedDir);
@@ -106,10 +103,8 @@ export async function syncManagedDir(
     return summary;
   }
 
-  // Ensure managed dir exists before installing
   await mkdir(managedDir, { recursive: true });
 
-  // Install desired items
   for (const { name, targetName, sourcePath } of resolvedItems) {
     const targetPath = join(managedDir, targetName);
 
@@ -118,22 +113,24 @@ export async function syncManagedDir(
       if (result === "created") {
         summary.added.push(name);
       } else if (result === "replaced") {
-        summary.added.push(name);
+        summary.updated.push(name);
       } else {
         summary.unchanged.push(name);
       }
-    } else {
-      // Copy mode — smart sync
-      try {
-        await lstat(targetPath);
-        // Exists — sync it
-        await smartSync(sourcePath, targetPath);
+      continue;
+    }
+
+    try {
+      await lstat(targetPath);
+      const changed = await smartSync(sourcePath, targetPath);
+      if (changed) {
+        summary.updated.push(name);
+      } else {
         summary.unchanged.push(name);
-      } catch {
-        // Doesn't exist — initial copy
-        await smartSync(sourcePath, targetPath);
-        summary.added.push(name);
       }
+    } catch {
+      await smartSync(sourcePath, targetPath);
+      summary.added.push(name);
     }
   }
 

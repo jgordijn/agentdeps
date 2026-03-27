@@ -31,27 +31,114 @@ import {
   validateAgentNames,
   type LabeledAgentPaths,
 } from "../registry/registry.ts";
-import { syncManagedDir, expandHomePath } from "../install/managed.ts";
+import { syncManagedDir, expandHomePath, type SyncSummary } from "../install/managed.ts";
 import { cleanupLegacyManagedDirs } from "../install/migration.ts";
 import { logError, printLogHint } from "../log/logger.ts";
 
-/** Resolved items from a single dependency */
 interface ResolvedDep {
   repo: string;
   cachePath: string;
   skills: DiscoveredItem[];
   agents: DiscoveredItem[];
+  updatedSkillNames: string[];
+  updatedAgentNames: string[];
 }
 
-/**
- * Process a list of dependencies: cache repos, discover, and filter.
- * Parallelizes repo caching for better performance with multiple deps.
- */
+export interface AgentInstallResult {
+  displayNames: string[];
+  skills: SyncSummary;
+  agents: SyncSummary;
+}
+
+function changedTopLevelItems(
+  changedPaths: readonly string[],
+  kind: "skills" | "agents"
+): Set<string> {
+  const names = new Set<string>();
+  const prefix = `${kind}/`;
+
+  for (const changedPath of changedPaths) {
+    if (!changedPath.startsWith(prefix)) {
+      continue;
+    }
+
+    const relativePath = changedPath.slice(prefix.length);
+    const [firstSegment] = relativePath.split("/");
+    if (!firstSegment) {
+      continue;
+    }
+
+    if (kind === "agents" && firstSegment.endsWith(".md")) {
+      names.add(firstSegment.replace(/\.md$/, ""));
+    } else {
+      names.add(firstSegment);
+    }
+  }
+
+  return names;
+}
+
+function mergeReportedUpdates(
+  summary: SyncSummary,
+  updatedNames: readonly string[]
+): SyncSummary {
+  const added = [...summary.added];
+  const updated = [...summary.updated];
+  const removed = [...summary.removed];
+  const unchanged = [...summary.unchanged];
+
+  for (const name of updatedNames) {
+    if (added.includes(name) || removed.includes(name) || updated.includes(name)) {
+      continue;
+    }
+
+    const unchangedIndex = unchanged.indexOf(name);
+    if (unchangedIndex !== -1) {
+      unchanged.splice(unchangedIndex, 1);
+    }
+    updated.push(name);
+  }
+
+  return { added, updated, removed, unchanged };
+}
+
+function collectRepoUpdatedNames(
+  resolvedDeps: readonly ResolvedDep[],
+  desiredItems: Map<string, string>,
+  kind: "skills" | "agents"
+): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+
+  for (const dep of resolvedDeps) {
+    const items = kind === "skills" ? dep.skills : dep.agents;
+    const updatedNames = new Set(
+      kind === "skills" ? dep.updatedSkillNames : dep.updatedAgentNames
+    );
+
+    for (const item of items) {
+      if (!updatedNames.has(item.name)) {
+        continue;
+      }
+      if (desiredItems.get(item.name) !== item.sourcePath) {
+        continue;
+      }
+      if (seen.has(item.name)) {
+        continue;
+      }
+
+      seen.add(item.name);
+      names.push(item.name);
+    }
+  }
+
+  return names;
+}
+
 async function resolveDeps(
   deps: readonly Dependency[],
   cloneMethod: "ssh" | "https"
 ): Promise<ResolvedDep[]> {
-  // Phase 1: Cache all repos in parallel
   const cacheResults = await Promise.all(
     deps.map(async (dep) => {
       const url = resolveRepoUrl(dep.repo, cloneMethod);
@@ -62,7 +149,6 @@ async function resolveDeps(
     })
   );
 
-  // Phase 2: Discover and filter (parallel per dep)
   const resolved = await Promise.all(
     cacheResults.map(async ({ dep, result }) => {
       if (!result.success) {
@@ -70,17 +156,16 @@ async function resolveDeps(
         return null;
       }
 
-      // Discover (parallel — independent operations)
       const [discoveredSkills, discoveredAgents] = await Promise.all([
         discoverSkills(result.path),
         discoverAgents(result.path),
       ]);
 
-      // Filter
       const skillResult = filterItems(discoveredSkills, dep.skills);
       const agentResult = filterItems(discoveredAgents, dep.agents);
+      const changedSkills = changedTopLevelItems(result.changedPaths, "skills");
+      const changedAgents = changedTopLevelItems(result.changedPaths, "agents");
 
-      // Warn on issues
       warnDiscoveryIssues(dep.repo, "skills", discoveredSkills, dep.skills, skillResult.missing);
       warnDiscoveryIssues(dep.repo, "agents", discoveredAgents, dep.agents, agentResult.missing);
 
@@ -89,36 +174,25 @@ async function resolveDeps(
         cachePath: result.path,
         skills: skillResult.selected,
         agents: agentResult.selected,
+        updatedSkillNames: skillResult.selected
+          .filter((item) => changedSkills.has(item.name))
+          .map((item) => item.name),
+        updatedAgentNames: agentResult.selected
+          .filter((item) => changedAgents.has(item.name))
+          .map((item) => item.name),
       };
     })
   );
 
-  // Filter out failed deps
   return resolved.filter((r): r is ResolvedDep => r !== null);
 }
 
-/** Per-agent install result */
-interface AgentInstallResult {
-  displayNames: string[];
-  skillsAdded: number;
-  skillsRemoved: number;
-  agentsAdded: number;
-  agentsRemoved: number;
-}
-
-/**
- * Install resolved deps to a set of managed directories.
- * Returns per-agent results for clear reporting.
- * Deduplicates directories to avoid redundant installs (e.g., universal agents
- * sharing project paths but differing in global paths).
- */
 async function installToManagedDirs(
   resolvedDeps: readonly ResolvedDep[],
   labeledPaths: LabeledAgentPaths[],
   scope: "project" | "global",
   installMethod: "link" | "copy"
 ): Promise<AgentInstallResult[]> {
-  // Build desired item maps
   const desiredSkills = new Map<string, string>();
   const desiredAgents = new Map<string, string>();
 
@@ -131,8 +205,13 @@ async function installToManagedDirs(
     }
   }
 
-  // Deduplicate by actual target directories for the given scope,
-  // merging display names when multiple agents share the same dirs.
+  const repoUpdatedSkills = installMethod === "link"
+    ? collectRepoUpdatedNames(resolvedDeps, desiredSkills, "skills")
+    : [];
+  const repoUpdatedAgents = installMethod === "link"
+    ? collectRepoUpdatedNames(resolvedDeps, desiredAgents, "agents")
+    : [];
+
   const dedupMap = new Map<string, { skillsDir: string; agentsDir: string; displayNames: string[] }>();
   for (const labeled of labeledPaths) {
     const skillsDir = scope === "global"
@@ -162,76 +241,95 @@ async function installToManagedDirs(
 
     results.push({
       displayNames,
-      skillsAdded: skillSummary.added.length,
-      skillsRemoved: skillSummary.removed.length,
-      agentsAdded: agentSummary.added.length,
-      agentsRemoved: agentSummary.removed.length,
+      skills: mergeReportedUpdates(skillSummary, repoUpdatedSkills),
+      agents: mergeReportedUpdates(agentSummary, repoUpdatedAgents),
     });
   }
 
   return results;
 }
 
-/**
- * Format install results for display.
- * When all agents have the same counts, shows a single summary line.
- * Otherwise shows per-agent breakdowns.
- */
-function formatInstallResults(scope: string, results: AgentInstallResult[]): string {
+function countPhrase(count: number, noun: "skill" | "agent", action: "added" | "updated" | "removed"): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"} ${action}`;
+}
+
+function detailLines(indent: string, kind: "skills" | "agents", summary: SyncSummary): string[] {
+  const lines: string[] = [];
+  if (summary.added.length > 0) lines.push(`${indent}${kind} added: ${summary.added.join(", ")}`);
+  if (summary.updated.length > 0) lines.push(`${indent}${kind} updated: ${summary.updated.join(", ")}`);
+  if (summary.removed.length > 0) lines.push(`${indent}${kind} removed: ${summary.removed.join(", ")}`);
+  return lines;
+}
+
+function summaryParts(result: AgentInstallResult): string[] {
+  const parts: string[] = [];
+
+  if (result.skills.added.length > 0) {
+    parts.push(countPhrase(result.skills.added.length, "skill", "added"));
+  }
+  if (result.skills.updated.length > 0) {
+    parts.push(countPhrase(result.skills.updated.length, "skill", "updated"));
+  }
+  if (result.skills.removed.length > 0) {
+    parts.push(countPhrase(result.skills.removed.length, "skill", "removed"));
+  }
+  if (result.agents.added.length > 0) {
+    parts.push(countPhrase(result.agents.added.length, "agent", "added"));
+  }
+  if (result.agents.updated.length > 0) {
+    parts.push(countPhrase(result.agents.updated.length, "agent", "updated"));
+  }
+  if (result.agents.removed.length > 0) {
+    parts.push(countPhrase(result.agents.removed.length, "agent", "removed"));
+  }
+
+  return parts;
+}
+
+export function formatInstallResults(scope: string, results: AgentInstallResult[]): string {
   if (results.length === 0) {
     return `  ✓ ${scope}: nothing to do`;
   }
 
   if (results.length === 1) {
-    const r = results[0]!;
-    const removed = r.skillsRemoved + r.agentsRemoved;
-    const parts: string[] = [];
-    if (r.skillsAdded > 0) parts.push(`${r.skillsAdded} skills added`);
-    if (r.agentsAdded > 0) parts.push(`${r.agentsAdded} agents added`);
-    if (removed > 0) parts.push(`${removed} removed`);
-    if (parts.length === 0) parts.push("up to date");
-    const label = r.displayNames.join(", ");
-    return `  ✓ ${scope} (${label}): ${parts.join(", ")}`;
+    const result = results[0]!;
+    const label = result.displayNames.join(", ");
+    const parts = summaryParts(result);
+    if (parts.length === 0) {
+      return `  ✓ ${scope} (${label}): up to date`;
+    }
+
+    const details = [
+      ...detailLines("      ", "skills", result.skills),
+      ...detailLines("      ", "agents", result.agents),
+    ];
+    return `  ✓ ${scope} (${label}): ${parts.join(", ")}\n${details.join("\n")}`;
   }
 
-  // Multiple agents — show per-agent lines
   const lines: string[] = [];
-  for (const r of results) {
-    const removed = r.skillsRemoved + r.agentsRemoved;
-    const parts: string[] = [];
-    if (r.skillsAdded > 0) parts.push(`${r.skillsAdded} skills added`);
-    if (r.agentsAdded > 0) parts.push(`${r.agentsAdded} agents added`);
-    if (removed > 0) parts.push(`${removed} removed`);
-    if (parts.length === 0) parts.push("up to date");
-    const label = r.displayNames.join(", ");
-    lines.push(`      ${label}: ${parts.join(", ")}`);
+  for (const result of results) {
+    const label = result.displayNames.join(", ");
+    const parts = summaryParts(result);
+    lines.push(`      ${label}: ${parts.length === 0 ? "up to date" : parts.join(", ")}`);
+    lines.push(...detailLines("        ", "skills", result.skills));
+    lines.push(...detailLines("        ", "agents", result.agents));
   }
   return `  ✓ ${scope}:\n${lines.join("\n")}`;
 }
 
-/**
- * Run the full install flow.
- */
 export async function runInstall(config: GlobalConfig): Promise<void> {
-  // Merge custom agents if any
   if (config.custom_agents) {
     mergeCustomAgents(config.custom_agents);
   }
 
-  // Validate agent names
   const unknown = validateAgentNames(config.agents);
   if (unknown.length > 0) {
     console.warn(`⚠ Unknown agents in config: ${unknown.join(", ")}`);
   }
 
-  // Resolve agent paths (with deduplication and labels)
   const labeledPaths = resolveAgentPathsLabeled(config.agents);
-
-  // Clean up legacy managed directories for migrated agents
   await cleanupLegacyManagedDirs(config.agents);
 
-
-  // 1. Process global agents.yaml
   const globalYamlPath = globalAgentsYamlPath();
 
   try {
@@ -241,7 +339,6 @@ export async function runInstall(config: GlobalConfig): Promise<void> {
 
       if (globalConfig.dependencies.length > 0) {
         const resolved = await resolveDeps(globalConfig.dependencies, config.clone_method);
-
         const results = await installToManagedDirs(resolved, labeledPaths, "global", config.install_method);
         console.log(formatInstallResults("Global", results));
       }
@@ -251,7 +348,6 @@ export async function runInstall(config: GlobalConfig): Promise<void> {
     console.warn("⚠ Failed to process global dependencies");
   }
 
-  // 2. Process project agents.yaml
   const projectYamlPath = join(process.cwd(), "agents.yaml");
 
   if (await projectConfigExists(projectYamlPath)) {
@@ -260,7 +356,6 @@ export async function runInstall(config: GlobalConfig): Promise<void> {
 
     if (projectConfig.dependencies.length > 0) {
       const resolved = await resolveDeps(projectConfig.dependencies, config.clone_method);
-
       const results = await installToManagedDirs(resolved, labeledPaths, "project", config.install_method);
       console.log(formatInstallResults("Project", results));
     } else {

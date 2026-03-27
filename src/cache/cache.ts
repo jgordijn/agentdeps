@@ -22,19 +22,48 @@ export function getCacheDir(): string {
     const localAppData = process.env["LOCALAPPDATA"] ?? join(home, "AppData", "Local");
     return join(localAppData, "agentdeps", "repos");
   }
-  // Linux and others: XDG_CACHE_HOME or default
   const xdg = process.env["XDG_CACHE_HOME"];
   return join(xdg ?? join(home, ".cache"), "agentdeps", "repos");
 }
 
-/** Run a git command and return { success, stdout, stderr } */
+function getSafeCwd(): string {
+  try {
+    return process.cwd();
+  } catch {
+    return homedir();
+  }
+}
+
+const GIT_ENV_VARS_TO_UNSET = [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_COMMON_DIR",
+  "GIT_NAMESPACE",
+  "GIT_PREFIX",
+  "GIT_SUPER_PREFIX",
+] as const;
+
+function gitSubprocessEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const key of GIT_ENV_VARS_TO_UNSET) {
+    delete env[key];
+  }
+  return env;
+}
+
+
+
 async function runGit(
   args: string[],
   cwd?: string
 ): Promise<{ success: boolean; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const proc = spawn("git", args, {
-      cwd,
+      cwd: cwd ?? getSafeCwd(),
+      env: gitSubprocessEnv(),
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -62,6 +91,37 @@ async function runGit(
   });
 }
 
+async function getHeadRevision(repoPath: string): Promise<string | undefined> {
+  const result = await runGit(["rev-parse", "HEAD"], repoPath);
+  if (!result.success || result.stdout.length === 0) {
+    return undefined;
+  }
+  return result.stdout;
+}
+
+async function getChangedPaths(
+  repoPath: string,
+  beforeRevision: string,
+  afterRevision: string
+): Promise<string[]> {
+  if (beforeRevision === afterRevision) {
+    return [];
+  }
+
+  const result = await runGit(
+    ["diff", "--name-only", beforeRevision, afterRevision, "--", "skills", "agents"],
+    repoPath
+  );
+  if (!result.success || result.stdout.length === 0) {
+    return [];
+  }
+
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 /** Check if git is available in PATH */
 export async function checkGitAvailable(): Promise<boolean> {
   try {
@@ -72,7 +132,6 @@ export async function checkGitAvailable(): Promise<boolean> {
   }
 }
 
-/** Check if a directory exists */
 async function dirExists(path: string): Promise<boolean> {
   try {
     const s = await fsStat(path);
@@ -82,15 +141,11 @@ async function dirExists(path: string): Promise<boolean> {
   }
 }
 
-/**
- * Clone a repository to the cache directory.
- * Uses --branch and --single-branch for efficiency.
- */
 export async function cloneRepo(
   url: string,
   ref: string,
   cacheKey: string
-): Promise<{ success: boolean; path: string; error?: string }> {
+): Promise<{ success: boolean; path: string; error?: string; changedPaths: string[] }> {
   const cacheDir = getCacheDir();
   await mkdir(cacheDir, { recursive: true });
 
@@ -106,84 +161,83 @@ export async function cloneRepo(
   ]);
 
   if (!result.success) {
-    // Clean up any partial directory left by the failed clone
     await rm(repoPath, { recursive: true, force: true });
 
-    // Fallback: try clone without --branch (for commit SHAs)
     const fallback = await runGit(["clone", url, repoPath]);
     if (fallback.success) {
       const checkout = await runGit(["checkout", ref], repoPath);
       if (!checkout.success) {
-        // Checkout failed — ref doesn't exist. Clean up the cloned directory
-        // to prevent stale content from being used on subsequent runs.
         await rm(repoPath, { recursive: true, force: true });
-        return { success: false, path: repoPath, error: `ref '${ref}' not found: ${checkout.stderr}` };
+        return {
+          success: false,
+          path: repoPath,
+          error: `ref '${ref}' not found: ${checkout.stderr}`,
+          changedPaths: [],
+        };
       }
-      return { success: true, path: repoPath };
+      return { success: true, path: repoPath, changedPaths: [] };
     }
-    return { success: false, path: repoPath, error: result.stderr };
+    return { success: false, path: repoPath, error: result.stderr, changedPaths: [] };
   }
 
-  return { success: true, path: repoPath };
+  return { success: true, path: repoPath, changedPaths: [] };
 }
 
-/**
- * Update an existing cached repository.
- * Fetches from origin and resets to the configured ref.
- * Uses `reset --hard` to avoid detached HEAD state for branch refs.
- */
 export async function updateRepo(
   repoPath: string,
   ref: string
-): Promise<{ success: boolean; error?: string }> {
-  // Fetch latest
+): Promise<{ success: boolean; error?: string; changedPaths: string[] }> {
+  const beforeRevision = await getHeadRevision(repoPath);
+
   const fetch = await runGit(["fetch", "origin"], repoPath);
   if (!fetch.success) {
-    return { success: false, error: fetch.stderr };
+    return { success: false, error: fetch.stderr, changedPaths: [] };
   }
 
-  // Try resetting to remote branch first (origin/<ref>)
   const resetBranch = await runGit(
     ["reset", "--hard", `origin/${ref}`],
     repoPath
   );
-  if (resetBranch.success) {
-    return { success: true };
+  if (!resetBranch.success) {
+    const checkoutRef = await runGit(["checkout", ref], repoPath);
+    if (!checkoutRef.success) {
+      return { success: false, error: checkoutRef.stderr, changedPaths: [] };
+    }
   }
 
-  // Fall back to tag or SHA (checkout is fine for these — they're always detached)
-  const checkoutRef = await runGit(["checkout", ref], repoPath);
-  if (!checkoutRef.success) {
-    return { success: false, error: checkoutRef.stderr };
+  const afterRevision = await getHeadRevision(repoPath);
+  if (!beforeRevision || !afterRevision) {
+    return { success: true, changedPaths: [] };
   }
 
-  return { success: true };
+  return {
+    success: true,
+    changedPaths: await getChangedPaths(repoPath, beforeRevision, afterRevision),
+  };
 }
 
-/**
- * Ensure a repository is cloned and up-to-date.
- * Clones if missing, updates if exists.
- * Returns the cache path.
- */
 export async function ensureRepo(
   url: string,
   ref: string,
   cacheKey: string
-): Promise<{ success: boolean; path: string; error?: string }> {
+): Promise<{ success: boolean; path: string; error?: string; changedPaths: string[] }> {
   const cacheDir = getCacheDir();
   const repoPath = join(cacheDir, cacheKey);
 
   if (await dirExists(repoPath)) {
-    // Update existing
     const result = await updateRepo(repoPath, ref);
     if (!result.success) {
       logError("cache.update", new Error(`Failed to update ${cacheKey}: ${result.error}`));
-      return { success: false, path: repoPath, error: `Failed to update ${cacheKey}: ${result.error}` };
+      return {
+        success: false,
+        path: repoPath,
+        error: `Failed to update ${cacheKey}: ${result.error}`,
+        changedPaths: [],
+      };
     }
-    return { success: true, path: repoPath };
+    return { success: true, path: repoPath, changedPaths: result.changedPaths };
   }
 
-  // Clone fresh
   const result = await cloneRepo(url, ref, cacheKey);
   if (!result.success) {
     logError("cache.clone", new Error(`Failed to clone ${url}: ${result.error}`));
